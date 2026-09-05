@@ -247,9 +247,21 @@ time, never reassign afterward. Deleting is ADMIN+ only.
 `assigneeId` is optional; if set to anyone other than yourself, requires ADMIN+. `403` if a
 MEMBER tries to assign someone else at creation.
 
-### `GET /?projectId={id}&status=&priority=&assigneeId=&page=&size=` — list/filter tasks (paginated)
-Full keyword search and date-range filtering land in Phase 13; this phase covers exact-match
-filtering by status/priority/assignee.
+### `GET /?projectId={id}&status=&priority=&assigneeId=&page=&size=&sort=` — list/filter tasks (paginated)
+Exact-match filtering by status/priority/assignee. Supports client-driven `?sort=field,dir`
+(e.g. `?sort=priority,desc`) since it's backed by a JPQL query. For keyword search, date-range
+filtering, and label filtering, see `GET /search` below.
+
+### `GET /search?projectId=&status=&priority=&assigneeId=&dueDateFrom=&dueDateTo=&label=&keyword=&page=&size=` — full search (Phase 13)
+```
+GET /api/v1/tasks/search?projectId=...&keyword=authentication&dueDateFrom=2026-09-01&dueDateTo=2026-09-30
+```
+All filters are optional and combine with AND. `keyword` is PostgreSQL full-text search
+(stemmed, e.g. "authentication" also matches "authenticate") - see
+[`docs/search.md`](search.md) for why this endpoint doesn't use Elasticsearch and what would
+change if it needed to. **Sort order is fixed** (nearest due date first, nulls last) - this
+endpoint does not honor `?sort=`, unlike `GET /` above; see `TaskRepository.advancedSearch`'s
+Javadoc for why.
 
 ### `GET /me` — my assigned tasks across every project (paginated)
 The dashboard's central query.

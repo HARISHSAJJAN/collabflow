@@ -251,6 +251,34 @@ problem rather than working around it. Both bugs were found the same way: not by
 code and reasoning about it, but by mechanically forcing the exact scenario (message
 redelivery) and checking the database afterward.
 
+## `ERROR: could not determine data type of parameter $8` on a native query with optional filters
+
+**When**: Phase 13, testing the new `GET /api/v1/tasks/search` endpoint's due-date-range
+filter (`TaskRepository.advancedSearch`, a native SQL query with several optional
+`(:param IS NULL OR ...)` filter clauses). Keyword, label, status, and priority filters all
+worked; the very first request using `dueDateFrom`/`dueDateTo` (with real, non-null date
+values) failed with a 500 and this Postgres error in the log.
+
+**Root cause**: PostgreSQL's extended query protocol resolves every bind parameter's data
+type once, when the statement is *prepared* - from the SQL's structure alone, before any
+value is bound or the query actually runs. A parameter whose only appearance in the query is
+`:param IS NULL` gives the planner no typed context to infer a type from (unlike `t.due_date
+>= :param`, which lets it infer `date` from the column). This is a prepare-time, structural
+ambiguity - it does not matter that the actual request had a real, non-null `LocalDate` value
+for that parameter; Postgres never gets that far before failing.
+
+**Fix**: explicit `cast(:param as <type>)` on every optional parameter's `IS NULL` check in
+the native query (`cast(:dueDateFrom as date) is null or ...`, and the same treatment for
+every other optional parameter in the query, not just the one that happened to fail first).
+
+**Takeaway**: a native query with `Optional-parameter IS NULL OR ...`-style filters needs
+every such parameter explicitly typed, not just the ones a first pass happens to exercise -
+the failure mode depends on the query's structure per-parameter, so "it worked for the other
+four filters" doesn't mean the fifth is safe. This is specific to native/JDBC-level parameter
+binding; the equivalent JPQL pattern (used elsewhere in this codebase, e.g.
+`TaskRepository.search`) doesn't have this problem, because Hibernate already knows each
+parameter's type from the entity's mapped attribute and sends it explicitly.
+
 ## Backend fails to start: `Required property 'collabflow.jwt.secret' not found` (or connection refused to Postgres/Redis/Kafka)
 
 **When**: running `mvn spring-boot:run` without infrastructure up, or without a `.env`/exported

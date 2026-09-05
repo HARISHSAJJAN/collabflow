@@ -47,6 +47,8 @@ Migrations are managed with Flyway, versioned SQL files in
 | V5 | `V5__create_tasks_and_task_labels.sql` | `tasks`, `task_labels` | 7 |
 | V6 | `V6__create_comments.sql` | `comments` | 8 |
 | V7 | `V7__create_audit_logs.sql` | `audit_logs` | 8 |
+| V8 | `V8__create_notifications_and_processed_events.sql` | `notifications`, `processed_events` | 10 |
+| V9 | `V9__add_task_search.sql` | `tasks.search_vector` (generated column) + GIN index | 13 |
 
 ## `users`
 
@@ -180,6 +182,25 @@ see `AuditService`'s Javadoc and docs/architecture.md's "Two kinds of cross-modu
 Indexes: `ix_audit_logs_project_id_created_at` and `ix_audit_logs_team_id_created_at` (both
 partial, `WHERE ... IS NOT NULL` - not every row has both scopes) back "view project/team
 activity"; `ix_audit_logs_actor_id` backs "what has this user done."
+
+## `notifications` / `processed_events`
+
+| Table | Notable columns | Notes |
+|---|---|---|
+| `notifications` | `type VARCHAR(50)` (no `CHECK` constraint, unlike other status-like columns in this schema), `payload JSONB`, `is_read BOOLEAN` | `type` has no `CHECK` constraint deliberately: new notification types are expected to be added over time (this project already added two - `TASK_MENTION`, `DUE_DATE_APPROACHING` - in Phase 11 alone) and a `CHECK` list would need a migration for each one, for a column whose valid values are really an application-level concern (`NotificationType`), not a database integrity concern the way `task.status` is. |
+| `processed_events` | `event_id UUID PRIMARY KEY` | The Kafka-consumer idempotency ledger - see [ADR-004](adr/ADR-004-kafka.md) and `docs/kafka.md` for the two real bugs found getting this table's *use* right (a JPA `save()`-vs-`persist()` upsert trap, then a transaction-rollback-poisoning trap) before landing on an atomic `INSERT ... ON CONFLICT DO NOTHING`. |
+
+Indexes: `ix_notifications_recipient_created_at` (my notifications, newest first - the only
+ordering this table needs) and a partial `ix_notifications_recipient_unread` (`WHERE is_read =
+FALSE` - keeps the unread-count query cheap regardless of how much read history accumulates).
+
+## `tasks.search_vector` (Phase 13)
+
+A generated, `STORED` `tsvector` column (`to_tsvector('english', title || ' ' ||
+description)`) with a GIN index, backing keyword search - see
+[`docs/search.md`](search.md) for the full "why PostgreSQL text search, not Elasticsearch"
+reasoning and a real bind-parameter-type-inference bug this phase's native query surfaced
+(see `docs/troubleshooting.md`).
 
 ## Connection pooling
 

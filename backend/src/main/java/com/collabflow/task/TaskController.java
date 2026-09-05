@@ -8,6 +8,7 @@ import com.collabflow.task.dto.ChangeStatusRequest;
 import com.collabflow.task.dto.CreateTaskRequest;
 import com.collabflow.task.dto.UpdateTaskRequest;
 import jakarta.validation.Valid;
+import java.time.LocalDate;
 import java.util.UUID;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
@@ -49,6 +50,28 @@ public class TaskController {
             @RequestParam(required = false) UUID assigneeId,
             @PageableDefault(size = 20) Pageable pageable) {
         return ResponseEntity.ok(taskService.listTasks(projectId, userId, status, priority, assigneeId, pageable));
+    }
+
+    /**
+     * The full search endpoint (Phase 13) - status/priority/assignee (same as {@code GET /}),
+     * plus keyword (full-text), a due-date range, and a label. Kept as its own endpoint rather
+     * than folded into {@code GET /} because its sort order is fixed, not client-controlled -
+     * see {@code TaskRepository.advancedSearch}'s Javadoc for why.
+     */
+    @GetMapping("/search")
+    public ResponseEntity<PageResponse<TaskResponse>> searchTasks(
+            @CurrentUserId UUID userId,
+            @RequestParam UUID projectId,
+            @RequestParam(required = false) TaskStatus status,
+            @RequestParam(required = false) TaskPriority priority,
+            @RequestParam(required = false) UUID assigneeId,
+            @RequestParam(required = false) LocalDate dueDateFrom,
+            @RequestParam(required = false) LocalDate dueDateTo,
+            @RequestParam(required = false) String label,
+            @RequestParam(required = false) String keyword,
+            @PageableDefault(size = 20) Pageable pageable) {
+        return ResponseEntity.ok(taskService.searchTasks(
+                projectId, userId, status, priority, assigneeId, dueDateFrom, dueDateTo, label, keyword, pageable));
     }
 
     /** "My assigned tasks" - the dashboard's central query, across every project. */

@@ -277,3 +277,21 @@ cross-process delivery) that don't apply.
   class of bug hit three times before, checked for and avoided here proactively rather than
   found after the fact. ADR-005; docs/websocket.md documents a real, low-severity gap (no
   per-subscription project-membership check) rather than hiding it.
+- **Phase 13 — Search, filtering, sorting (done)**: `GET /api/v1/tasks/search` adds keyword
+  (PostgreSQL full-text search via a generated, GIN-indexed `search_vector` column - not
+  Elasticsearch, see `docs/search.md` for the explicit "why not, and what would justify it
+  later" reasoning the brief asks for), due-date range, and label filtering on top of the
+  existing status/priority/assignee filters and pagination from Phase 7. A native query, with
+  a documented, deliberate limitation: no client-controlled sort (native queries don't
+  participate in Spring Data's property-to-column `Sort` mapping the way the simpler JPQL-based
+  `GET /api/v1/tasks` listing does). **Found a real bug via testing**: PostgreSQL couldn't
+  determine a bind parameter's type for an optional filter whose only appearance was
+  `:param IS NULL` (a prepare-time, structural ambiguity, independent of whether the value was
+  actually null at runtime) - fixed with explicit `cast(:param as <type>)` on every optional
+  parameter, not just the one that happened to fail first. Also closed a real documentation
+  gap found while writing this entry: the `notifications`/`processed_events` tables (built in
+  Phase 10) had never been added to `docs/database.md`'s migration table or given their own
+  schema section - fixed alongside this phase's own V9 documentation. Verified end-to-end:
+  keyword search correctly matching stemmed forms and excluding non-matches, label filtering,
+  date-range filtering (post-fix), a combined multi-filter query, and the default sort order
+  (nearest due date first, nulls last).

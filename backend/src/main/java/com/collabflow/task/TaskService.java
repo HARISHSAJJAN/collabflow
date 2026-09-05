@@ -107,6 +107,25 @@ public class TaskService {
         return PageResponse.from(page.map(t -> toResponse(t, labelsOf(t.getId()))));
     }
 
+    /**
+     * The full search endpoint (Phase 13): status/priority/assignee filters plus keyword
+     * (full-text), due-date range, and label - see {@code TaskRepository.advancedSearch}'s
+     * Javadoc for why this is a separate method (a native query, with a fixed sort order)
+     * rather than folded into {@link #listTasks}.
+     */
+    @Transactional(readOnly = true)
+    public PageResponse<TaskResponse> searchTasks(
+            UUID projectId, UUID requestingUserId, TaskStatus status, TaskPriority priority, UUID assigneeId,
+            LocalDate dueDateFrom, LocalDate dueDateTo, String label, String keyword, Pageable pageable) {
+        projectService.requireProjectAccess(projectId, requestingUserId);
+        Page<Task> page = taskRepository.advancedSearch(
+                projectId,
+                status == null ? null : status.name(),
+                priority == null ? null : priority.name(),
+                assigneeId, dueDateFrom, dueDateTo, label, keyword, pageable);
+        return PageResponse.from(page.map(t -> toResponse(t, labelsOf(t.getId()))));
+    }
+
     @Transactional(readOnly = true)
     public PageResponse<TaskResponse> listMyAssignedTasks(UUID requestingUserId, Pageable pageable) {
         Page<Task> page = taskRepository.findByAssigneeId(requestingUserId, pageable);
