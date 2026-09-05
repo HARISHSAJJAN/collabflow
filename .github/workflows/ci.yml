@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# A second push to the same branch/PR cancels whatever CI run is already in flight for it -
+# there's no value in finishing a build for a commit that's already been superseded.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Backend build & test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      # Real Postgres/Redis/Kafka via Testcontainers, exactly like local development - GitHub's
+      # ubuntu-latest runners have Docker available out of the box, no extra setup needed. This
+      # is also why there's no separate "unit test" vs "integration test" split in CI: the whole
+      # suite (see docs/testing.md) already runs in well under the time a network fetch of a
+      # fresh JDK/Maven image would cost anyway.
+      - name: Run backend test suite
+        working-directory: backend
+        run: mvn -B test
+
+      - name: Publish test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports
+          path: backend/target/surefire-reports/
+          retention-days: 7
+
+  docker-build:
+    name: Build backend image
+    runs-on: ubuntu-latest
+    needs: test
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Only authenticate/push on an actual push to main, never for a pull request from a fork
+      # (which wouldn't have permission to push packages here anyway, and shouldn't need to -
+      # a PR only needs to prove the image *builds*, not publish one).
+      - name: Log in to GitHub Container Registry
+        if: github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and (on main) push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: ${{ github.event_name == 'push' }}
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/collabflow-backend:latest
+            ghcr.io/${{ github.repository_owner }}/collabflow-backend:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
