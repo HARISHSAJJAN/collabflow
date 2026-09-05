@@ -126,6 +126,37 @@ don't surface to the original HTTP client, this kind of listener is worth a spec
 end-to-end test (or at minimum a manual check of the server log), not just a happy-path check
 of the endpoint that published the event.
 
+## API response had `null` (or stale) `createdAt`/`updatedAt`/`joinedAt`, even though the database row was correct
+
+**When**: Phase 5, `POST /api/v1/teams` - the response's `createdAt`/`updatedAt` came back
+`null` immediately after creating a team, and a freshly-added team member's `joinedAt` was
+also `null`.
+
+**Root cause**: `createdAt`/`updatedAt` (on `BaseEntity`, via `@CreationTimestamp`/
+`@UpdateTimestamp`) and `TeamMember.joinedAt` are populated by Hibernate at **flush** time,
+not at the moment `repository.save(entity)` is called. `save()` on a new entity with a
+client-generated id (`GenerationType.UUID` - see `BaseEntity`'s Javadoc) doesn't need to hit
+the database immediately to get an id back the way `GenerationType.IDENTITY` would, so
+Hibernate has no reason to flush early; with default `FlushMode.AUTO` and no intervening
+query, nothing forces a flush until the transaction commits. Reading
+`team.getCreatedAt()` on the same in-memory instance immediately after `save()`, inside the
+same transaction, therefore reads a field Hibernate hasn't populated yet.
+
+The row in the database is always correct once the transaction actually commits - this bug
+only affected the JSON returned for *that specific request*, which builds its response from
+the in-memory entity before commit.
+
+**Fix**: `repository.saveAndFlush(entity)` instead of `save(entity)` at every call site that
+immediately reads a Hibernate-generated field back into a response DTO within the same
+transaction (`TeamService.createTeam`, `updateTeam`, `addMemberByEmail`).
+
+**Takeaway**: any time a response DTO is built from an entity's `@CreationTimestamp`/
+`@UpdateTimestamp`/similar Hibernate-generated field right after writing that same entity in
+the same transaction, check whether a flush actually happened first - `save()` alone does not
+guarantee it. This is easy to miss because it only shows up in the response, not in the
+database, so a "does the data look right in the DB?" check alone won't catch it; it takes an
+end-to-end request/response test, which is exactly how this was caught.
+
 ## Backend fails to start: `Required property 'collabflow.jwt.secret' not found` (or connection refused to Postgres/Redis/Kafka)
 
 **When**: running `mvn spring-boot:run` without infrastructure up, or without a `.env`/exported

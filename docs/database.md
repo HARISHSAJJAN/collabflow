@@ -42,6 +42,7 @@ Migrations are managed with Flyway, versioned SQL files in
 |---|---|---|---|
 | V1 | `V1__create_users_table.sql` | `users` | 2 |
 | V2 | `V2__create_refresh_tokens_table.sql` | `refresh_tokens` | 2 |
+| V3 | `V3__create_teams_and_team_members.sql` | `teams`, `team_members` | 5 |
 
 ## `users`
 
@@ -87,6 +88,32 @@ inconsistency, not automatically everywhere a value repeats.
   accumulates, instead of indexing rows that are never queried by this predicate again.
 - `ix_refresh_tokens_expires_at`: backs a scheduled cleanup job (Phase 3) that deletes rows
   well past expiry, so this table doesn't grow unbounded.
+
+## `teams` / `team_members`
+
+| Table | Notable columns | Notes |
+|---|---|---|
+| `teams` | `created_by UUID REFERENCES users(id)` | See "Cross-module foreign keys" below - this is a real SQL foreign key, but `Team.java` does **not** have a JPA `@ManyToOne` to `User`. |
+| `team_members` | `role VARCHAR(20) CHECK (role IN (...))`, unique on `(team_id, user_id)` | One row per (team, user) - "assign a role" is an `UPDATE`, not a new row. See the V3 migration's comment for why `CHECK` was chosen over a native Postgres `ENUM` type. |
+
+Indexes: `ux_team_members_team_user` (unique, and doubles as the index for "list this team's
+roster" since `team_id` is its leading column), `ix_team_members_user_id` (for "list my
+teams" - a `user_id`-only lookup the unique index's column order can't serve efficiently),
+`ix_teams_created_by`.
+
+### Cross-module foreign keys: a database-level FK without a Java-level object reference
+
+`teams.created_by` has a real `REFERENCES users(id)` constraint - PostgreSQL still enforces
+that a team can't be created for a nonexistent user, and referential integrity doesn't erode
+just because `users` and `teams` are owned by different Java modules. What does **not** exist
+is a JPA `@ManyToOne` from `Team` to `user.internal.User`: that would require the `team`
+module to import a class from `user.internal`, which is exactly the kind of dependency Spring
+Modulith's boundary check is there to catch and fail the build over (see ADR-001). Every
+cross-module reference in this schema follows the same pattern: a plain UUID column, a real
+SQL foreign key for integrity, and - when the referencing module needs display data about the
+referenced row - a call to the owning module's public service (e.g.
+`UserAccountService.findSummaryById(...)`) rather than an object graph traversal. This is a
+deliberate, consistent convention across the whole codebase, not a one-off.
 
 ## Connection pooling
 

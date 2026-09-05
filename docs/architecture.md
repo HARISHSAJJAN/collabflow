@@ -158,3 +158,17 @@ The test for which to use: would a hypothetical future separate `notification-se
 "module A just did something module B, still in the same JVM, needs to react to," a Spring
 event is simpler and avoids paying for guarantees (ordering across a partition, replay,
 cross-process delivery) that don't apply.
+
+- **Phase 5 — Teams (done)**: `team` module - teams, team membership, OWNER/ADMIN/MEMBER
+  roles, with the invariant that a team always has at least one OWNER enforced in
+  `TeamService` (attempting to remove or demote the last OWNER returns `409`). This phase is
+  where the "no cross-module JPA associations" convention was established (`Team.java`'s
+  Javadoc, and `docs/database.md`'s "Cross-module foreign keys" section) - `teams.created_by`
+  is a real SQL foreign key to `users.id`, but there is no `@ManyToOne` from `Team` to the
+  user module's entity. Caught and fixed a third real bug: `@CreationTimestamp`/
+  `@UpdateTimestamp` fields read immediately after `save()` (before the transaction's next
+  flush) came back `null`/stale in the API response even though the database row was correct
+  - fixed with `saveAndFlush()`; full writeup in `docs/troubleshooting.md`. Verified
+  end-to-end: team creation, non-member 404s, adding a member, MEMBER-role authorization
+  boundaries (403 on admin actions), the last-owner-protection invariant (409, then success
+  after promoting a second owner), post-removal 404, and pagination.

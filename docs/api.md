@@ -133,9 +133,61 @@ access/refresh tokens used to make this very call keep working only until the ac
 normal 15-minute expiry, but the refresh token (and every other session's) is immediately
 revoked, so the user (or an attacker who had a stolen session) must log in again everywhere.
 
-## Coming in later phases
+## Teams (`/api/v1/teams`) — Phase 5
 
-- `/api/v1/teams` (Phase 5)
+All endpoints require authentication. Authorization policy (full reasoning in `TeamService`'s
+Javadoc): viewing a team or its roster requires being a member (any role) - a non-member gets
+`404 RESOURCE_NOT_FOUND`, identical to a nonexistent team id, so team existence is never
+revealed to non-members. Editing the team's name/description requires OWNER or ADMIN.
+Everything membership-related - inviting, removing, changing roles, deleting the team - is
+OWNER-only. **A team must always have at least one OWNER**: removing or demoting the last
+OWNER returns `409 CONFLICT`.
+
+### `POST /` — create a team
+```json
+// request
+{"name": "Platform Team", "description": "Core platform"}
+// 201 response - the creator becomes OWNER automatically
+{"id": "...", "name": "Platform Team", "description": "Core platform", "createdBy": "...", "myRole": "OWNER", "createdAt": "...", "updatedAt": "..."}
+```
+
+### `GET /` — list my teams (paginated)
+Standard Spring Data page params: `?page=0&size=20`.
+```json
+{"content": [ {"...team..."} ], "page": 0, "size": 20, "totalElements": 1, "totalPages": 1, "last": true}
+```
+
+### `GET /{teamId}` — team details
+`404` if the team doesn't exist or you're not a member.
+
+### `PATCH /{teamId}` — update name/description (OWNER or ADMIN)
+
+### `DELETE /{teamId}` — delete the team (OWNER only)
+
+### `GET /{teamId}/members` — list the roster (any member)
+```json
+[{"userId": "...", "email": "...", "fullName": "...", "avatarUrl": null, "role": "MEMBER", "joinedAt": "..."}]
+```
+
+### `POST /{teamId}/members` — add a member by email (OWNER only)
+```json
+{"email": "frank@example.com"}
+```
+`404` if no account exists with that email; `409` if they're already a member. New members
+always start as `MEMBER` - promote separately via the role endpoint. **Note on scope**: this
+adds an *existing* registered user immediately; it is not a pending invitation the invitee
+must accept, and it cannot invite an email with no account yet. A full invitation-with-
+acceptance flow (including inviting not-yet-registered emails) is a deliberately deferred
+future improvement, not a hidden gap - see `docs/decisions.md`.
+
+### `PATCH /{teamId}/members/{userId}` — change a member's role (OWNER only)
+```json
+{"role": "ADMIN"}
+```
+
+### `DELETE /{teamId}/members/{userId}` — remove a member (OWNER only)
+
+## Coming in later phases
 - `/api/v1/projects` (Phase 6)
 - `/api/v1/tasks` (Phase 7)
 - `/api/v1/comments` (Phase 8)
