@@ -123,7 +123,11 @@ springdoc:
 
 logging:
   pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{35} - %msg%n"
+    # %X{requestId} pulls the correlation id CorrelationIdFilter puts in MDC (Phase 18) - "(no
+    # requestId)" default so log lines from startup/scheduled jobs outside any HTTP request
+    # (Flyway migration output, DueDateReminderJob, Kafka consumer threads) still print cleanly
+    # instead of an empty "[]".
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%X{requestId:-no requestId}] [%thread] %-5level %logger{35} - %msg%n"
   level:
     root: INFO
     com.collabflow: INFO

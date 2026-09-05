@@ -12,6 +12,7 @@ import com.collabflow.task.internal.TaskLabel;
 import com.collabflow.task.internal.TaskLabelRepository;
 import com.collabflow.task.internal.TaskRepository;
 import com.collabflow.team.TeamRole;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
@@ -47,18 +48,21 @@ public class TaskService {
     private final ProjectService projectService;
     private final ApplicationEventPublisher eventPublisher;
     private final DomainEventPublisher domainEventPublisher;
+    private final MeterRegistry meterRegistry;
 
     public TaskService(
             TaskRepository taskRepository,
             TaskLabelRepository taskLabelRepository,
             ProjectService projectService,
             ApplicationEventPublisher eventPublisher,
-            DomainEventPublisher domainEventPublisher) {
+            DomainEventPublisher domainEventPublisher,
+            MeterRegistry meterRegistry) {
         this.taskRepository = taskRepository;
         this.taskLabelRepository = taskLabelRepository;
         this.projectService = projectService;
         this.eventPublisher = eventPublisher;
         this.domainEventPublisher = domainEventPublisher;
+        this.meterRegistry = meterRegistry;
     }
 
     /**
@@ -85,6 +89,7 @@ public class TaskService {
         Task task = new Task(projectId, title.trim(), blankToNull(description), priority, dueDate, requestingUserId);
         task.setAssigneeId(assigneeId);
         Task saved = taskRepository.saveAndFlush(task);
+        meterRegistry.counter("collabflow.tasks.created", "priority", saved.getPriority().name()).increment();
         publishBoth(new TaskCreatedEvent(saved.getId(), projectId, saved.getTitle(), requestingUserId), KafkaTopics.TASK_EVENTS, saved.getId());
         if (assigneeId != null) {
             publishBoth(new TaskAssignedEvent(saved.getId(), projectId, assigneeId, requestingUserId), KafkaTopics.TASK_EVENTS, saved.getId());
@@ -157,6 +162,7 @@ public class TaskService {
         task.setStatus(newStatus);
         Task saved = taskRepository.saveAndFlush(task);
         if (newStatus != oldStatus) {
+            meterRegistry.counter("collabflow.tasks.status_changed", "to", newStatus.name()).increment();
             publishBoth(new TaskStatusChangedEvent(taskId, task.getProjectId(), oldStatus, newStatus, requestingUserId), KafkaTopics.TASK_EVENTS, taskId);
         }
         return toResponse(saved, labelsOf(taskId));

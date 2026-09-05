@@ -8,6 +8,7 @@ import com.collabflow.auth.dto.SessionResponse;
 import com.collabflow.cache.RateLimiter;
 import com.collabflow.common.exception.RateLimitExceededException;
 import com.collabflow.config.CurrentUserId;
+import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.time.Duration;
@@ -43,6 +44,7 @@ public class AuthController {
 
     private final AuthService authService;
     private final RateLimiter rateLimiter;
+    private final MeterRegistry meterRegistry;
     private final int loginCapacity;
     private final Duration loginWindow;
     private final int loginByEmailCapacity;
@@ -53,6 +55,7 @@ public class AuthController {
     public AuthController(
             AuthService authService,
             RateLimiter rateLimiter,
+            MeterRegistry meterRegistry,
             @Value("${collabflow.rate-limit.login.capacity}") int loginCapacity,
             @Value("${collabflow.rate-limit.login.window-seconds}") long loginWindowSeconds,
             @Value("${collabflow.rate-limit.login-by-email.capacity}") int loginByEmailCapacity,
@@ -61,6 +64,7 @@ public class AuthController {
             @Value("${collabflow.rate-limit.register.window-seconds}") long registerWindowSeconds) {
         this.authService = authService;
         this.rateLimiter = rateLimiter;
+        this.meterRegistry = meterRegistry;
         this.loginCapacity = loginCapacity;
         this.loginWindow = Duration.ofSeconds(loginWindowSeconds);
         this.loginByEmailCapacity = loginByEmailCapacity;
@@ -118,6 +122,7 @@ public class AuthController {
     private void requireWithinRateLimit(String action, String identity, int capacity, Duration window) {
         String key = "ratelimit:" + action + ":" + identity;
         if (!rateLimiter.tryAcquire(key, capacity, window)) {
+            meterRegistry.counter("collabflow.ratelimit.exceeded", "action", action).increment();
             throw new RateLimitExceededException("Too many " + action + " attempts; try again later");
         }
     }

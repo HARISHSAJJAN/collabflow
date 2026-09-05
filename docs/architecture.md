@@ -351,3 +351,19 @@ cross-process delivery) that don't apply.
   pushed image is genuinely public by pulling it with zero authentication from a machine logged
   out of GHCR. Also explains a pre-existing Dependabot failure from Phase 15 (nothing to scan
   before this phase's workflow file existed) that this phase's own commit resolves on its own.
+
+- **Phase 18 — Observability (done)**: six business metrics (`collabflow.auth.login` tagged
+  `result`, `collabflow.auth.register`, `collabflow.ratelimit.exceeded` tagged `action`,
+  `collabflow.tasks.created` tagged `priority`, `collabflow.tasks.status_changed` tagged `to`,
+  `collabflow.notifications.sent` tagged `type`) added as plain `MeterRegistry.counter(...)`
+  calls at the exact point each event is known to have committed - not `@Counted`/`@Timed`
+  annotations, matching this codebase's established preference for explicit code over hidden
+  annotation behavior (see `RedisCacheService`). Plus `config.CorrelationIdFilter`: every
+  request gets an id (reusing an incoming `X-Request-Id` header if present), in MDC for the
+  request's duration and echoed back as a response header, so every log line from handling one
+  request can be grep'd together. Full reasoning, including why full distributed tracing is a
+  deliberately-not-implemented gap for a single-process monolith, in `docs/observability.md`.
+  Verified live, not just compiled: booted the app, logged in, confirmed
+  `collabflow_auth_login_total{result="success"}` on `/actuator/prometheus`, and confirmed two
+  different requests produced two different correlation ids grouping their own SQL log lines
+  correctly.

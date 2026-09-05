@@ -6,6 +6,7 @@ import com.collabflow.notification.internal.Notification;
 import com.collabflow.notification.internal.NotificationRepository;
 import com.collabflow.notification.internal.ProcessedEventRepository;
 import com.collabflow.websocket.NotificationPusher;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,14 +27,17 @@ public class NotificationService {
     private final NotificationRepository notificationRepository;
     private final ProcessedEventRepository processedEventRepository;
     private final NotificationPusher notificationPusher;
+    private final MeterRegistry meterRegistry;
 
     public NotificationService(
             NotificationRepository notificationRepository,
             ProcessedEventRepository processedEventRepository,
-            NotificationPusher notificationPusher) {
+            NotificationPusher notificationPusher,
+            MeterRegistry meterRegistry) {
         this.notificationRepository = notificationRepository;
         this.processedEventRepository = processedEventRepository;
         this.notificationPusher = notificationPusher;
+        this.meterRegistry = meterRegistry;
     }
 
     /**
@@ -78,6 +82,7 @@ public class NotificationService {
         // for this exact class of bug, hit and fixed three times already in this project.
         Notification saved = notificationRepository.saveAndFlush(new Notification(recipientId, type, payloadJson));
         notificationPusher.pushToUser(recipientId, toResponse(saved));
+        meterRegistry.counter("collabflow.notifications.sent", "type", type.name()).increment();
         return true;
     }
 

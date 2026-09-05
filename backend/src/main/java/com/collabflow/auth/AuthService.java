@@ -7,6 +7,7 @@ import com.collabflow.user.PasswordChangedEvent;
 import com.collabflow.user.UserAccountService;
 import com.collabflow.user.UserCredentials;
 import com.collabflow.user.UserSummary;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -30,41 +31,53 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final RefreshTokenService refreshTokenService;
+    private final MeterRegistry meterRegistry;
 
     public AuthService(
             UserAccountService userAccountService,
             PasswordEncoder passwordEncoder,
             JwtService jwtService,
-            RefreshTokenService refreshTokenService) {
+            RefreshTokenService refreshTokenService,
+            MeterRegistry meterRegistry) {
         this.userAccountService = userAccountService;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
         this.refreshTokenService = refreshTokenService;
+        this.meterRegistry = meterRegistry;
     }
 
     @Transactional
     public UUID register(String email, String rawPassword, String fullName) {
         String passwordHash = passwordEncoder.encode(rawPassword);
-        return userAccountService.register(email, passwordHash, fullName);
+        UUID userId = userAccountService.register(email, passwordHash, fullName);
+        meterRegistry.counter("collabflow.auth.register").increment();
+        return userId;
     }
 
     /**
      * Deliberately returns the same generic failure ("invalid email or password") whether the
      * email doesn't exist, the account is deactivated, or the password is wrong - not
      * distinguishing which one to an attacker is a basic account-enumeration defense.
+     *
+     * <p>The {@code collabflow.auth.login} counter's {@code result} tag (Phase 18) is the one
+     * business metric on this endpoint worth watching in production: a sudden spike in
+     * {@code result=failure} relative to {@code result=success}, sustained rather than a single
+     * blip, is exactly the shape a credential-stuffing attempt or a client-side bug (e.g. a
+     * frontend deploy that broke the login form) would produce - either way, something a human
+     * should be paged about long before it shows up as a support ticket.</p>
      */
     @Transactional
     public AuthResponse login(String email, String rawPassword, String userAgent, String ipAddress) {
-        UserCredentials credentials = userAccountService.findCredentialsByEmail(email)
-                .orElseThrow(() -> new BadCredentialsException("Invalid email or password"));
-
-        if (!credentials.active() || !passwordEncoder.matches(rawPassword, credentials.passwordHash())) {
+        UserCredentials credentials = userAccountService.findCredentialsByEmail(email).orElse(null);
+        if (credentials == null || !credentials.active() || !passwordEncoder.matches(rawPassword, credentials.passwordHash())) {
+            meterRegistry.counter("collabflow.auth.login", "result", "failure").increment();
             throw new BadCredentialsException("Invalid email or password");
         }
 
         userAccountService.touchLastLogin(credentials.userId());
         String accessToken = jwtService.generateAccessToken(credentials.userId(), credentials.email());
         RefreshTokenService.IssuedToken refreshToken = refreshTokenService.issue(credentials.userId(), userAgent, ipAddress);
+        meterRegistry.counter("collabflow.auth.login", "result", "success").increment();
         return AuthResponse.bearer(credentials.userId(), accessToken, refreshToken.rawValue(), jwtService.getAccessTokenTtlSeconds());
     }
 
