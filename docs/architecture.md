@@ -330,3 +330,15 @@ cross-process delivery) that don't apply.
   is now pinned in `backend/pom.xml`. Test suite grew from 31 to 33 tests (the new
   `RateLimiterIntegrationTest`'s two cases); full details of every change in
   `docs/security.md`'s Phase 15 entries.
+
+- **Phase 16 — Docker (done)**: `backend/Dockerfile`, a three-stage build (compile → extract
+  Spring Boot's own layered-jar output → assemble a minimal Alpine JRE runtime image from just
+  those layers, running as a non-root user). Full reasoning for the layering and the
+  container-aware JVM heap sizing in `docs/deployment.md`. Verified end-to-end, not just built:
+  brought up the whole stack with `docker compose up -d --build`, waited for the backend's own
+  Docker healthcheck to report healthy, and ran a real register/login round trip against the
+  containerized instance, confirming a genuine JWT came back with Phase 15's security headers
+  attached. The `frontend` service block that had sat in `docker-compose.yml` since Phase 1 -
+  pointing at a `./frontend` directory with no code in it yet - is removed for now rather than
+  left to fail `docker compose up` outright; see `docs/deployment.md` for why and when it comes
+  back.

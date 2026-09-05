@@ -12,7 +12,7 @@ implemented yet.
 ## Status
 
 Under active, phased development. See `docs/architecture.md` → "Development phase log" for
-exactly which phases are complete. Currently: **Phase 15 (security hardening) done.**
+exactly which phases are complete. Currently: **Phase 16 (Docker) done.**
 
 ## Why this project exists
 
@@ -66,22 +66,30 @@ Full list with reasoning: [`docs/decisions.md`](docs/decisions.md).
 
 1. Copy `.env.example` to `.env` and fill in real values (at minimum generate a `JWT_SECRET`
    with `openssl rand -base64 64` — the app refuses to start without one, on purpose).
-2. Start infrastructure:
-   ```bash
-   docker compose up -d postgres redis kafka
-   ```
-3. Run the backend (until Phase 16, run it directly rather than via Docker):
-   ```bash
-   cd backend
-   mvn spring-boot:run -Dspring-boot.run.profiles=dev
-   ```
-   The app reads DB/Redis/Kafka connection details from environment variables (see
-   `.env.example`); export them into your shell or use a tool like `direnv` / your IDE's
-   run-configuration env support.
-4. API docs (Swagger UI) once the auth/API phases land: `http://localhost:8080/swagger-ui.html`
-5. Health check: `http://localhost:8080/actuator/health`
 
-Frontend setup instructions are added once the frontend phase begins.
+**Option A — everything via Docker Compose** (Postgres, Redis, Kafka, and the backend itself,
+built from `backend/Dockerfile` - see `docs/deployment.md` for how that image is built):
+```bash
+docker compose up -d --build
+```
+
+**Option B — infrastructure in Docker, backend run directly** (faster edit/rebuild loop during
+development, since it skips the container build on every code change):
+```bash
+docker compose up -d postgres redis kafka
+cd backend
+mvn spring-boot:run -Dspring-boot.run.profiles=dev
+```
+The app reads DB/Redis/Kafka connection details from environment variables (see
+`.env.example`); export them into your shell or use a tool like `direnv` / your IDE's
+run-configuration env support.
+
+Either way:
+3. API docs (Swagger UI): `http://localhost:8080/swagger-ui.html`
+4. Health check: `http://localhost:8080/actuator/health`
+
+Frontend setup instructions are added once the frontend phase begins - see
+`docker-compose.yml`'s comment on why no `frontend` service is defined yet.
 
 ## Testing
 
