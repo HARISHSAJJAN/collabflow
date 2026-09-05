@@ -230,7 +230,53 @@ a team member; `409` if they're already a project member.
 
 ### `DELETE /{projectId}/members/{userId}` — remove a project member (ADMIN+)
 
+## Tasks (`/api/v1/tasks`) — Phase 7
+
+All endpoints require authentication and project access (full reasoning in `TaskService`'s
+Javadoc). Editing a task (title/description/priority/due date/status/labels) requires either
+team role ADMIN+ (any task in the project) or being the task's current assignee (only that
+task). **Assigning/unassigning is ADMIN+ only** - a MEMBER may self-assign only at creation
+time, never reassign afterward. Deleting is ADMIN+ only.
+
+### `POST /` — create a task
+```json
+{"projectId": "...", "title": "Fix login bug", "priority": "HIGH", "dueDate": "2026-09-20", "assigneeId": "..."}
+```
+`assigneeId` is optional; if set to anyone other than yourself, requires ADMIN+. `403` if a
+MEMBER tries to assign someone else at creation.
+
+### `GET /?projectId={id}&status=&priority=&assigneeId=&page=&size=` — list/filter tasks (paginated)
+Full keyword search and date-range filtering land in Phase 13; this phase covers exact-match
+filtering by status/priority/assignee.
+
+### `GET /me` — my assigned tasks across every project (paginated)
+The dashboard's central query.
+
+### `GET /{taskId}` — task details
+Response includes `version` - see the concurrency note below.
+
+### `PATCH /{taskId}` — update title/description/priority/due date
+`409 CONCURRENT_MODIFICATION` if the task was modified by someone else since your last read -
+re-fetch and retry, don't just resubmit blindly. See [ADR-006](adr/ADR-006-optimistic-locking.md).
+
+### `PATCH /{taskId}/status`
+```json
+{"status": "IN_PROGRESS"}
+```
+
+### `PATCH /{taskId}/assignee` (ADMIN+)
+```json
+{"assigneeId": "..."}
+```
+`assigneeId` may be `null` to unassign. `409 CONFLICT` if the target isn't a project member.
+
+### `DELETE /{taskId}` (ADMIN+)
+
+### `POST /{taskId}/labels` / `DELETE /{taskId}/labels/{label}`
+```json
+{"label": "backend"}
+```
+
 ## Coming in later phases
-- `/api/v1/tasks` (Phase 7)
 - `/api/v1/comments` (Phase 8)
 - `/api/v1/notifications` (Phase 11)

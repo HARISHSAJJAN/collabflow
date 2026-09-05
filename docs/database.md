@@ -44,6 +44,7 @@ Migrations are managed with Flyway, versioned SQL files in
 | V2 | `V2__create_refresh_tokens_table.sql` | `refresh_tokens` | 2 |
 | V3 | `V3__create_teams_and_team_members.sql` | `teams`, `team_members` | 5 |
 | V4 | `V4__create_projects_and_project_members.sql` | `projects`, `project_members` | 6 |
+| V5 | `V5__create_tasks_and_task_labels.sql` | `tasks`, `task_labels` | 7 |
 
 ## `users`
 
@@ -126,6 +127,30 @@ deliberate, consistent convention across the whole codebase, not a one-off.
 Indexes: `ix_projects_team_id_status` (a composite index serving both "all of a team's
 projects" and "a team's ACTIVE projects" - `status` alone would rarely be queried without also
 filtering by team), `ux_project_members_project_user`, `ix_project_members_user_id`.
+
+## `tasks` / `task_labels`
+
+| Table | Notable columns | Notes |
+|---|---|---|
+| `tasks` | `version BIGINT NOT NULL DEFAULT 0` | JPA optimistic locking (`@Version`) - see [ADR-006](adr/ADR-006-optimistic-locking.md). This is the only table in the schema with a version column; see that ADR and `Task.java`'s Javadoc for why it's scoped to just this one, product-motivated case. |
+| `task_labels` | unique on `(task_id, label)` | Free-text per task, not a shared catalog - see `docs/decisions.md`. |
+
+Indexes: `ix_tasks_project_id_status` (composite - the task board is always project-scoped,
+then usually filtered by status/column), `ix_tasks_assignee_id` (partial, `WHERE assignee_id
+IS NOT NULL` - backs "my assigned tasks," the dashboard's central cross-project query),
+`ix_tasks_due_date` (partial, for "upcoming deadlines" and future date-range filtering in
+Phase 13).
+
+### Concurrency: proving the lost-update scenario is actually prevented
+
+Two real `curl` requests fired concurrently (not sequentially) against the same task, both
+starting from the same version, is the exact test run during Phase 7 (see
+`docs/troubleshooting.md`'s Phase 5/6 entries for the pattern of bugs this kind of true
+end-to-end testing - as opposed to reading the code and assuming - has caught in this
+project). One request won and the row's version advanced by exactly one; the other received
+`409 CONCURRENT_MODIFICATION` instead of silently overwriting the winner's change. A proper
+concurrent-access `TaskConcurrencyTest` (two real threads, not two sequential requests) is
+added in Phase 14 to keep this guarantee under automated regression coverage.
 
 ## Connection pooling
 

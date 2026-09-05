@@ -11,6 +11,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.AuthenticationException;
@@ -62,6 +63,20 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiError> handleConflict(ConflictException ex, HttpServletRequest req) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(ApiError.of(409, "CONFLICT", ex.getMessage(), req.getRequestURI()));
+    }
+
+    /**
+     * Thrown by Hibernate when an {@code @Version}-checked UPDATE affects zero rows - i.e.
+     * someone else modified this row after the current request read it (see ADR-006 and
+     * {@code Task}'s Javadoc). 409, not 500: this isn't a bug, it's the concurrency control
+     * working as designed, and the client's correct recovery is "re-fetch and retry," which
+     * a 409 communicates and a 500 would not.
+     */
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<ApiError> handleOptimisticLock(HttpServletRequest req) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiError.of(409, "CONCURRENT_MODIFICATION",
+                        "This resource was modified by someone else since you last loaded it; refresh and try again", req.getRequestURI()));
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)

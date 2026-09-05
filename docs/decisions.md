@@ -10,7 +10,7 @@ standard Context / Decision / Alternatives / Consequences / Trade-offs format.
 | ADR-003 | Why Redis | Planned — Phase 9 |
 | ADR-004 | Why Kafka | Planned — Phase 10 |
 | ADR-005 | Why WebSockets (STOMP over raw WebSocket) | Planned — Phase 12 |
-| ADR-006 | Why optimistic locking for task updates | Planned — Phase 7 |
+| [ADR-006](adr/ADR-006-optimistic-locking.md) | Why optimistic locking for task updates | Accepted |
 | ADR-007 | Why REST (not GraphQL) | Planned — Phase 6 |
 | [ADR-008](adr/ADR-008-jwt-and-refresh-tokens.md) | Why JWT access + refresh tokens (not server sessions) | Accepted |
 
@@ -44,6 +44,17 @@ relevant code's Javadoc and cross-referenced here so they're easy to find:
   from the team role it would inevitably need to stay consistent with. Project visibility is
   still asymmetric (ADMIN+ sees all of a team's projects, MEMBER only sees projects they've
   been added to) without needing a role of its own to express that.
+- **Task labels are free-text per task, not a shared per-project label catalog** (Phase 7, the
+  V5 migration's comment): `task_labels` is just `(task_id, label)`, unique per task. A full
+  catalog (its own table, color-coding, reuse/rename-everywhere-at-once across a project) is
+  real additional scope the brief's "add labels" doesn't demand. If label reuse/color-coding
+  became an actual product requirement, that would be the point to add a `labels` table and
+  migrate `task_labels` to reference it.
+- **Assigning a task is ADMIN+-only; a MEMBER may only self-assign at creation time, then
+  edit a task already assigned to them** (Phase 7, `TaskService`'s class Javadoc): read
+  literally, the brief's "MEMBER: create/update assigned tasks" describes a MEMBER acting on
+  work already assigned to them, not reassigning work to anyone (including themselves) at
+  will after the fact. Deciding who works on what was treated as a management action.
 - **No cross-module JPA associations, ever** (first established Phase 5, `Team.java`'s
   Javadoc; see also `docs/database.md`'s "Cross-module foreign keys" section): every
   reference from one module's entity to a row owned by another module is a plain UUID column

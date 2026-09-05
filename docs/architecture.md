@@ -183,3 +183,15 @@ cross-process delivery) that don't apply.
   rule (MEMBER sees 0 then 1 project after being added, ADMIN always sees both), a non-member
   getting 404 on direct access, and archive → blocked-edit (409) → unarchive → edit-succeeds
   with a correctly updated `updatedAt`.
+- **Phase 7 — Tasks (done)**: `task` module - tasks, status/priority, assignment, free-text
+  labels, and this project's mandatory concurrency requirement: JPA optimistic locking
+  (`@Version`) on `Task.version`, the only versioned entity in the schema (see ADR-006 for
+  why it's scoped to just this one). Authorization: edit requires ADMIN+ or being the current
+  assignee; assignment changes and delete are ADMIN+ only. **Verified under an actual
+  concurrent race**, not just implemented: two `curl` requests fired truly concurrently
+  (`&` + `wait`, not sequential) against the same task, both starting from the same version -
+  one succeeded and advanced the version by one, the other received `409
+  CONCURRENT_MODIFICATION` instead of silently overwriting the winner's change. Also verified:
+  self-assign-at-creation allowed, assigning someone else as a MEMBER rejected (403),
+  ADMIN-only delete enforced, and the cross-module internal-package import check still clean
+  with five modules now in place.
