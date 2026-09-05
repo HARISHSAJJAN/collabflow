@@ -1,0 +1,132 @@
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: collabflow-backend
+
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:collabflow}
+    username: ${DB_USER:collabflow}
+    password: ${DB_PASSWORD:collabflow}
+    hikari:
+      # Small pool on purpose: PostgreSQL connections are expensive and each app instance
+      # gets its own pool. See docs/database.md for the sizing rationale.
+      maximum-pool-size: ${DB_POOL_MAX:10}
+      minimum-idle: ${DB_POOL_MIN:2}
+      connection-timeout: 30000
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          batch_size: 20
+          time_zone: UTC
+        order_inserts: true
+        order_updates: true
+        generate_statistics: false
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: false
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      connect-timeout: 2000ms
+      timeout: 2000ms
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: collabflow-backend
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      properties:
+        spring.json.trusted.packages: "com.collabflow.*"
+        spring.json.add.type.headers: true
+    producer:
+      acks: all
+      properties:
+        enable.idempotence: true
+        retries: 5
+    listener:
+      ack-mode: MANUAL_IMMEDIATE
+
+  threads:
+    virtual:
+      enabled: true
+
+collabflow:
+  jwt:
+    # No default on purpose: the app must fail fast at startup rather than silently run
+    # with a guessable secret. Generate one with: openssl rand -base64 64
+    secret: ${JWT_SECRET}
+    access-token-ttl-minutes: ${JWT_ACCESS_TTL_MINUTES:15}
+    refresh-token-ttl-days: ${JWT_REFRESH_TTL_DAYS:30}
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
+  rate-limit:
+    login:
+      capacity: ${RATE_LIMIT_LOGIN_CAPACITY:5}
+      window-seconds: ${RATE_LIMIT_LOGIN_WINDOW_SECONDS:60}
+    register:
+      capacity: ${RATE_LIMIT_REGISTER_CAPACITY:3}
+      window-seconds: ${RATE_LIMIT_REGISTER_WINDOW_SECONDS:3600}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+      probes:
+        enabled: true
+  health:
+    redis:
+      enabled: true
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+  api-docs:
+    path: /v3/api-docs
+
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{35} - %msg%n"
+  level:
+    root: INFO
+    com.collabflow: INFO
+    org.springframework.security: WARN
+
+---
+spring:
+  config:
+    activate:
+      on-profile: dev
+logging:
+  level:
+    com.collabflow: DEBUG
+    org.hibernate.SQL: DEBUG
+
+---
+spring:
+  config:
+    activate:
+      on-profile: prod
+logging:
+  level:
+    com.collabflow: INFO

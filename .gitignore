@@ -1,0 +1,32 @@
+# Secrets / local env
+.env
+*.local
+
+# Backend (Maven / Java)
+backend/target/
+*.class
+*.jar
+!.mvn/wrapper/maven-wrapper.jar
+*.log
+hs_err_pid*
+
+# Frontend (Node)
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+npm-debug.log*
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker volumes (bind-mounted local data, if any)
+docker/data/
