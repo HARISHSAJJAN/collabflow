@@ -15,6 +15,8 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
+import org.springframework.security.web.header.writers.StaticHeadersWriter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -76,6 +78,37 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .headers(headers -> headers
+                        // Spring Security already sets X-Content-Type-Options: nosniff and
+                        // X-Frame-Options: DENY by default (kept as-is below). Everything in
+                        // this block is this API's own addition on top of that baseline - see
+                        // docs/security.md's Phase 15 entry for why each one is here and what
+                        // it defends against for a JSON API with no first-party HTML pages of
+                        // its own (Swagger UI is the one exception, hence 'self' rather than
+                        // 'none' below).
+                        .contentSecurityPolicy(csp -> csp.policyDirectives(
+                                "default-src 'self'; "
+                                        + "script-src 'self'; "
+                                        + "style-src 'self' 'unsafe-inline'; "
+                                        + "img-src 'self' data:; "
+                                        + "connect-src 'self'; "
+                                        + "frame-ancestors 'none'; "
+                                        + "base-uri 'none'; "
+                                        + "form-action 'self'"))
+                        .referrerPolicy(referrer -> referrer.policy(ReferrerPolicyHeaderWriter.ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN))
+                        // No browser feature here is one this API's own responses ever need -
+                        // added as a plain static header writer since HeadersConfigurer's own
+                        // permissionsPolicy(...) is deprecated for removal in this Spring
+                        // Security version.
+                        .addHeaderWriter(new StaticHeadersWriter(
+                                "Permissions-Policy", "geolocation=(), camera=(), microphone=(), payment=(), usb=()"))
+                        // Only takes effect on an HTTPS connection (browsers ignore HSTS over
+                        // plain HTTP, and local dev is HTTP) - TLS termination is a deployment
+                        // concern (a reverse proxy/load balancer in front of this app), not
+                        // something this app does itself. See docs/security.md.
+                        .httpStrictTransportSecurity(hsts -> hsts
+                                .includeSubDomains(true)
+                                .maxAgeInSeconds(31536000)))
                 .exceptionHandling(handling -> handling
                         .authenticationEntryPoint(this::handleUnauthenticated)
                         .accessDeniedHandler((req, res, ex) -> handleForbidden(req, res)))

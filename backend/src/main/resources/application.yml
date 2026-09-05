@@ -87,6 +87,12 @@ collabflow:
     login:
       capacity: ${RATE_LIMIT_LOGIN_CAPACITY:5}
       window-seconds: ${RATE_LIMIT_LOGIN_WINDOW_SECONDS:60}
+    login-by-email:
+      # A second, wider-window limiter keyed by the submitted email instead of client IP -
+      # see AuthController's Javadoc and docs/security.md (Phase 15) for why the per-IP
+      # limiter alone doesn't stop a distributed brute force against one specific account.
+      capacity: ${RATE_LIMIT_LOGIN_BY_EMAIL_CAPACITY:10}
+      window-seconds: ${RATE_LIMIT_LOGIN_BY_EMAIL_WINDOW_SECONDS:900}
     register:
       capacity: ${RATE_LIMIT_REGISTER_CAPACITY:3}
       window-seconds: ${RATE_LIMIT_REGISTER_WINDOW_SECONDS:3600}

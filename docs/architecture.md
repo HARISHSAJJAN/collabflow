@@ -311,3 +311,22 @@ cross-process delivery) that don't apply.
   to the class that natively supports the `apache/kafka` image, Surefire configured for one JVM
   fork per test class instead of one shared fork for the whole run, and the concurrency test's
   racer requests read as `String` instead of the success-only response DTO.
+
+- **Phase 15 — Security hardening (done)**: closed the three gaps `docs/security.md` had
+  explicitly tracked as deferred to this phase, plus one found along the way. (1) A second,
+  email-keyed login rate limiter alongside the existing per-IP one, closing the "distributed
+  brute force against one account from many IPs" gap - proven with a new
+  `RateLimiterIntegrationTest` against real Redis. (2) Secure response headers
+  (`Content-Security-Policy`, `Referrer-Policy`, `Permissions-Policy`,
+  `Strict-Transport-Security`) added to `SecurityConfig`, verified by curling a running
+  instance and inspecting the raw headers rather than trusting the configuration alone -
+  including confirming Swagger UI still renders correctly under the new CSP (its bundle is
+  entirely same-origin `<script src>` tags, no inline scripts, so no `'unsafe-inline'` was
+  needed for `script-src`). (3) Dependency vulnerability scanning wired in via GitHub
+  Dependabot (`.github/dependabot.yml`) rather than a local OWASP `dependency-check` run - see
+  `docs/security.md` for the trade-off - plus a one-time manual review against current
+  advisories that found a real, fixable issue: Spring Boot 3.5.16's managed PostgreSQL JDBC
+  driver version (`42.7.11`) carries two 2026 CVEs fixed in `42.7.12`, so `postgresql.version`
+  is now pinned in `backend/pom.xml`. Test suite grew from 31 to 33 tests (the new
+  `RateLimiterIntegrationTest`'s two cases); full details of every change in
+  `docs/security.md`'s Phase 15 entries.

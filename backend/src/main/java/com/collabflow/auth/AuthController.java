@@ -28,14 +28,14 @@ import org.springframework.web.bind.annotation.RestController;
  * Registration, login, token refresh, logout, and session management. Full lifecycle
  * documented in docs/api.md and docs/security.md.
  *
- * <p>Login and registration are rate-limited per client IP (see {@link RateLimiter} for the
- * algorithm and its documented fail-open behavior on a Redis outage). Rate limiting by IP
- * rather than by the submitted email/identity is a deliberate scope choice: it stops a single
- * source from hammering either endpoint, which is the most common real-world abuse pattern,
- * without needing to track per-account attempt history. A distributed brute force against one
- * specific account from many different IPs would not be caught by this - that's a real,
- * acknowledged gap (see docs/security.md), and closing it would mean adding a second,
- * per-email limiter alongside this one.</p>
+ * <p>Login is rate-limited by <b>two independent keys</b> (see {@link RateLimiter} for the
+ * algorithm and its documented fail-open behavior on a Redis outage): a tight, short-window
+ * limit per client IP (stops a single source from hammering the endpoint - the most common
+ * real-world abuse pattern), and a wider, longer-window limit per submitted email (Phase 15 -
+ * stops a distributed brute force against one specific account from many different IPs, which
+ * the IP-only limiter cannot see). Registration is rate-limited by IP only - repeatedly
+ * registering the same email is already rejected by the uniqueness constraint, so a per-email
+ * limiter there would add no protection the database doesn't already provide.</p>
  */
 @RestController
 @RequestMapping("/api/v1/auth")
@@ -45,6 +45,8 @@ public class AuthController {
     private final RateLimiter rateLimiter;
     private final int loginCapacity;
     private final Duration loginWindow;
+    private final int loginByEmailCapacity;
+    private final Duration loginByEmailWindow;
     private final int registerCapacity;
     private final Duration registerWindow;
 
@@ -53,12 +55,16 @@ public class AuthController {
             RateLimiter rateLimiter,
             @Value("${collabflow.rate-limit.login.capacity}") int loginCapacity,
             @Value("${collabflow.rate-limit.login.window-seconds}") long loginWindowSeconds,
+            @Value("${collabflow.rate-limit.login-by-email.capacity}") int loginByEmailCapacity,
+            @Value("${collabflow.rate-limit.login-by-email.window-seconds}") long loginByEmailWindowSeconds,
             @Value("${collabflow.rate-limit.register.capacity}") int registerCapacity,
             @Value("${collabflow.rate-limit.register.window-seconds}") long registerWindowSeconds) {
         this.authService = authService;
         this.rateLimiter = rateLimiter;
         this.loginCapacity = loginCapacity;
         this.loginWindow = Duration.ofSeconds(loginWindowSeconds);
+        this.loginByEmailCapacity = loginByEmailCapacity;
+        this.loginByEmailWindow = Duration.ofSeconds(loginByEmailWindowSeconds);
         this.registerCapacity = registerCapacity;
         this.registerWindow = Duration.ofSeconds(registerWindowSeconds);
     }
@@ -72,7 +78,8 @@ public class AuthController {
 
     @PostMapping("/login")
     public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request, HttpServletRequest httpRequest) {
-        requireWithinRateLimit("login", clientIp(httpRequest), loginCapacity, loginWindow);
+        requireWithinRateLimit("login-ip", clientIp(httpRequest), loginCapacity, loginWindow);
+        requireWithinRateLimit("login-email", request.email().trim().toLowerCase(), loginByEmailCapacity, loginByEmailWindow);
         AuthResponse response = authService.login(
                 request.email(), request.password(), httpRequest.getHeader("User-Agent"), clientIp(httpRequest));
         return ResponseEntity.ok(response);
@@ -108,8 +115,8 @@ public class AuthController {
         return ResponseEntity.noContent().build();
     }
 
-    private void requireWithinRateLimit(String action, String clientIp, int capacity, Duration window) {
-        String key = "ratelimit:" + action + ":" + clientIp;
+    private void requireWithinRateLimit(String action, String identity, int capacity, Duration window) {
+        String key = "ratelimit:" + action + ":" + identity;
         if (!rateLimiter.tryAcquire(key, capacity, window)) {
             throw new RateLimitExceededException("Too many " + action + " attempts; try again later");
         }

@@ -72,6 +72,8 @@ public abstract class AbstractIntegrationTest {
         registry.add("collabflow.cors.allowed-origins", () -> "http://localhost:5173");
         registry.add("collabflow.rate-limit.login.capacity", () -> "1000"); // high in tests - rate limiting itself is tested separately, in isolation
         registry.add("collabflow.rate-limit.login.window-seconds", () -> "60");
+        registry.add("collabflow.rate-limit.login-by-email.capacity", () -> "1000");
+        registry.add("collabflow.rate-limit.login-by-email.window-seconds", () -> "60");
         registry.add("collabflow.rate-limit.register.capacity", () -> "1000");
         registry.add("collabflow.rate-limit.register.window-seconds", () -> "3600");
     }

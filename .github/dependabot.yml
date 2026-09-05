@@ -1,0 +1,20 @@
+version: 2
+updates:
+  # Backend (Maven). Grouped into one weekly PR per ecosystem rather than one PR per
+  # dependency - see docs/security.md's Phase 15 entry for why Dependabot was chosen over a
+  # local OWASP dependency-check scan for this project.
+  - package-ecosystem: "maven"
+    directory: "/backend"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    groups:
+      maven-dependencies:
+        patterns:
+          - "*"
+
+  # Keeps the workflow actions themselves patched once Phase 17 adds GitHub Actions workflows.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
