@@ -15,7 +15,9 @@ import com.collabflow.team.TeamRole;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -109,7 +111,7 @@ public class TaskService {
             UUID projectId, UUID requestingUserId, TaskStatus status, TaskPriority priority, UUID assigneeId, Pageable pageable) {
         projectService.requireProjectAccess(projectId, requestingUserId);
         Page<Task> page = taskRepository.search(projectId, status, priority, assigneeId, pageable);
-        return PageResponse.from(page.map(t -> toResponse(t, labelsOf(t.getId()))));
+        return toResponsePage(page);
     }
 
     /**
@@ -128,13 +130,13 @@ public class TaskService {
                 status == null ? null : status.name(),
                 priority == null ? null : priority.name(),
                 assigneeId, dueDateFrom, dueDateTo, label, keyword, pageable);
-        return PageResponse.from(page.map(t -> toResponse(t, labelsOf(t.getId()))));
+        return toResponsePage(page);
     }
 
     @Transactional(readOnly = true)
     public PageResponse<TaskResponse> listMyAssignedTasks(UUID requestingUserId, Pageable pageable) {
         Page<Task> page = taskRepository.findByAssigneeId(requestingUserId, pageable);
-        return PageResponse.from(page.map(t -> toResponse(t, labelsOf(t.getId()))));
+        return toResponsePage(page);
     }
 
     @Transactional
@@ -258,6 +260,20 @@ public class TaskService {
 
     private List<String> labelsOf(UUID taskId) {
         return taskLabelRepository.findByTaskId(taskId).stream().map(TaskLabel::getLabel).toList();
+    }
+
+    /**
+     * The page-listing equivalent of {@link #labelsOf} - found by testing under real load
+     * (Phase 19's performance review, see docs/performance.md): calling {@code labelsOf} once
+     * per row while mapping a page is a classic N+1 query, one extra round trip per task on the
+     * page instead of one for the whole page. This fetches every label for every task id on the
+     * page in a single {@code IN (...)} query and groups them in memory instead.
+     */
+    private PageResponse<TaskResponse> toResponsePage(Page<Task> page) {
+        List<UUID> taskIds = page.getContent().stream().map(Task::getId).toList();
+        Map<UUID, List<String>> labelsByTaskId = taskLabelRepository.findByTaskIdIn(taskIds).stream()
+                .collect(Collectors.groupingBy(TaskLabel::getTaskId, Collectors.mapping(TaskLabel::getLabel, Collectors.toList())));
+        return PageResponse.from(page.map(t -> toResponse(t, labelsByTaskId.getOrDefault(t.getId(), List.of()))));
     }
 
     private static TaskResponse toResponse(Task task, List<String> labels) {

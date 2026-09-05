@@ -367,3 +367,12 @@ cross-process delivery) that don't apply.
   `collabflow_auth_login_total{result="success"}` on `/actuator/prometheus`, and confirmed two
   different requests produced two different correlation ids grouping their own SQL log lines
   correctly.
+
+- **Phase 19 — Performance review (done)**: a real `k6` load test (three scenarios: list,
+  full-text search, create - 3,314 requests, 0 failures) against the app running on this
+  machine, which led directly to a genuine finding: every task-listing endpoint had an N+1
+  query fetching each row's labels one at a time. Fixed with a batched
+  `TaskLabelRepository.findByTaskIdIn(...)` query, verified by literally counting the SQL
+  Hibernate issued before and after (21 queries for a 20-row page → 2) and confirming the
+  batched version still returns the exactly-correct labels per task. Full numbers, methodology,
+  and honest caveats about what this test does and doesn't prove in `docs/performance.md`.

@@ -14,7 +14,7 @@ implemented yet.
 ## Status
 
 Under active, phased development. See `docs/architecture.md` → "Development phase log" for
-exactly which phases are complete. Currently: **Phase 18 (observability) done.**
+exactly which phases are complete. Currently: **Phase 19 (performance review) done.**
 
 ## Why this project exists
 
@@ -119,6 +119,7 @@ default in `application.yml` — the app fails fast at startup if `JWT_SECRET` i
 - [`docs/search.md`](docs/search.md) — full-text search, why not Elasticsearch yet (added Phase 13)
 - [`docs/testing.md`](docs/testing.md) — test strategy and coverage table (added Phase 14)
 - [`docs/observability.md`](docs/observability.md) — metrics, correlation ids, why not full tracing (added Phase 18)
+- [`docs/performance.md`](docs/performance.md) — real load test results and the N+1 query they found (added Phase 19)
 - [`docs/api.md`](docs/api.md) — REST API reference (added Phase 3+)
 - [`docs/security.md`](docs/security.md) — security review (added Phase 3, expanded Phase 15)
 - [`docs/deployment.md`](docs/deployment.md) — Docker/CI-CD (added Phase 16-17)
