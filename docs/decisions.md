@@ -12,7 +12,7 @@ standard Context / Decision / Alternatives / Consequences / Trade-offs format.
 | ADR-005 | Why WebSockets (STOMP over raw WebSocket) | Planned — Phase 12 |
 | ADR-006 | Why optimistic locking for task updates | Planned — Phase 7 |
 | ADR-007 | Why REST (not GraphQL) | Planned — Phase 6 |
-| ADR-008 | Why JWT access + refresh tokens (not server sessions) | Planned — Phase 3 |
+| [ADR-008](adr/ADR-008-jwt-and-refresh-tokens.md) | Why JWT access + refresh tokens (not server sessions) | Accepted |
 
 ADRs are added as the corresponding phase of `docs/architecture.md`'s development log is
 completed — each one reflects a decision actually made and implemented, not a decision

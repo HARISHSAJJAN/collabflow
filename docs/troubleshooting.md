@@ -56,6 +56,36 @@ automatically by "always resolve latest") breaks an ecosystem library's internal
 excluding the offending optional artifact is often less risky than pinning the whole framework
 back to an older patch version.
 
+## Refresh-token reuse detection didn't actually revoke other sessions
+
+**When**: manually testing the "stolen refresh token" scenario during Phase 3 - present an
+already-rotated (already-used) refresh token, expect every session for that user to be
+revoked as a precaution. The 401 response was correct, but a *second* still-valid rotated
+token kept working afterward, when it should have been revoked too.
+
+**Root cause**: `RefreshTokenService.rotate()` performed the "revoke every active session for
+this user" bulk update, then returned a result that `AuthService.refresh()` turned into a
+thrown `InvalidRefreshTokenException` - both inside the *same* `@Transactional` method
+boundary (`AuthService.refresh`, with `rotate` joining that transaction via default
+`REQUIRED` propagation). Spring's default behavior is to roll back the transaction on any
+unchecked exception, so throwing to report "this token is invalid" silently rolled back the
+revocation that was supposed to be the security response.
+
+Confirmed by inspecting `refresh_tokens` directly after the failed test: the token that should
+have been revoked instead had no `revoked_at` and was successfully rotated by a later request
+- proof its revocation never actually committed.
+
+**Fix**: moved the revocation into its own Spring bean, `SessionRevocationService`, with
+`@Transactional(propagation = Propagation.REQUIRES_NEW)`. `REQUIRES_NEW` only takes effect
+when called *through the Spring proxy* (i.e. from a different bean) - a same-class call would
+have bypassed the proxy and stayed in the original, doomed-to-roll-back transaction. See
+ADR-008 for the full writeup.
+
+**Takeaway**: when a side effect must survive regardless of what the calling code does next
+(especially "report failure by throwing"), check whether it's sharing a transaction with code
+that might roll back - and remember that `@Transactional` propagation changes only take effect
+across a proxy boundary, not on a same-class method call.
+
 ## Backend fails to start: `Required property 'collabflow.jwt.secret' not found` (or connection refused to Postgres/Redis/Kafka)
 
 **When**: running `mvn spring-boot:run` without infrastructure up, or without a `.env`/exported

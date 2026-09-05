@@ -117,3 +117,13 @@ Each entry is added when that phase is actually complete, compiling, and tested 
   `update`), `users` and `refresh_tokens` tables (V1/V2), verified applied against the real
   Postgres container with the correct indexes/constraints. Details and indexing rationale in
   `docs/database.md`; ADR-002 (why PostgreSQL).
+- **Phase 3 — Authentication (done)**: `user` module (User entity + repository kept internal,
+  `UserAccountService` as the only way in - see the module boundary discussion above),
+  `auth` module (JWT access tokens, opaque hashed rotating refresh tokens, reuse detection,
+  session listing/revocation), Spring Security wired for stateless JWT auth with a custom
+  `@CurrentUserId` argument resolver and JSON error responses for 401/403. Caught and fixed a
+  real `@Transactional` propagation bug during testing (revocation on token-reuse was silently
+  rolled back) - see `docs/troubleshooting.md` and ADR-008. Verified end-to-end against the
+  real running app with curl: register, duplicate-email conflict, validation errors, login,
+  wrong password, protected-endpoint 401/200, refresh rotation, reuse detection revoking all
+  sessions, logout, and Swagger UI/OpenAPI exposure.
