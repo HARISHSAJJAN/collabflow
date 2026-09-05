@@ -12,7 +12,7 @@ implemented yet.
 ## Status
 
 Under active, phased development. See `docs/architecture.md` → "Development phase log" for
-exactly which phases are complete. Currently: **Phase 3 (authentication) done.**
+exactly which phases are complete. Currently: **Phase 4 (user profile management) done.**
 
 ## Why this project exists
 

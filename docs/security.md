@@ -43,6 +43,13 @@ Bean Validation (`jakarta.validation`) on every request DTO - email format, pass
 bounds (8-128 chars), required fields. Enforced by `@Valid` in controllers;
 `MethodArgumentNotValidException` is mapped to a `400` with per-field messages.
 
+### Password change revokes every session (Phase 4)
+`POST /api/v1/users/me/password` requires the current password, and on success publishes an
+in-process event that revokes every refresh token for the account (see
+`AuthService#onPasswordChanged`) - a stale or stolen session cannot outlive a password change.
+Surfaced a real `@TransactionalEventListener` propagation bug while testing this (see
+`docs/troubleshooting.md`): the first implementation silently failed to revoke anything.
+
 ### Secure-by-default authorization (Phase 3)
 `SecurityConfig`'s endpoint rules are an explicit allow-list for *public* endpoints;
 `.anyRequest().authenticated()` is the fallback. A new controller added later requires

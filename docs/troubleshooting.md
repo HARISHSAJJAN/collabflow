@@ -86,6 +86,46 @@ ADR-008 for the full writeup.
 that might roll back - and remember that `@Transactional` propagation changes only take effect
 across a proxy boundary, not on a same-class method call.
 
+## `@TransactionalEventListener` action silently didn't happen (`TransactionRequiredException` in the logs, but the client got a normal success response)
+
+**When**: Phase 4, wiring "revoke all sessions when the password changes" as a
+`@TransactionalEventListener(phase = AFTER_COMMIT)` in `AuthService`, listening for a
+`PasswordChangedEvent` published by the `user` module. The password-change HTTP call
+correctly returned `204`, but a refresh token issued before the change still worked
+afterward - the revocation silently never took effect.
+
+**Root cause**: two stacked mistakes, in order:
+
+1. First attempt: `onPasswordChanged` had no `@Transactional` of its own and called
+   `logoutAllSessions(...)` (which *is* `@Transactional`) via a same-class ("self")
+   invocation. Self-invocation bypasses the Spring proxy, so no transaction was opened at
+   all, and the bulk-revoke `@Modifying` query failed with
+   `jakarta.persistence.TransactionRequiredException`. Because this happens inside an
+   `AFTER_COMMIT` listener - which runs *after* the original HTTP request's transaction has
+   already committed and its response effectively decided - the exception only showed up as
+   an `ERROR o.s.t.s.TransactionSynchronizationUtils - TransactionSynchronization.
+   afterCompletion threw exception` in the server log, never as an HTTP error to the client.
+   This is worth remembering on its own: a failure in an `AFTER_COMMIT` listener cannot
+   surface as an HTTP error, because the response for the request that triggered it may
+   already be on the wire.
+2. Second attempt: added plain `@Transactional` to `onPasswordChanged` to fix that - Spring
+   refused to even start, failing fast at context-refresh time with `@TransactionalEvent
+   Listener method must not be annotated with @Transactional unless when declared as
+   REQUIRES_NEW or NOT_SUPPORTED`. This makes sense in hindsight: by the time an
+   `AFTER_COMMIT` listener runs, the transaction it was listening on is already gone, so
+   `REQUIRED` propagation ("join the current transaction, or start one if none exists") has
+   nothing sensible to join.
+
+**Fix**: `@Transactional(propagation = Propagation.REQUIRES_NEW)` on `onPasswordChanged`.
+
+**Takeaway**: a `@TransactionalEventListener` method needs its own explicit transaction
+management if it does write work, and that transaction must be `REQUIRES_NEW` (or
+`NOT_SUPPORTED`) - never plain `REQUIRED` - because there is no ambient transaction left by
+the time `AFTER_COMMIT`/`AFTER_ROLLBACK`/`AFTER_COMPLETION` fires. And because failures here
+don't surface to the original HTTP client, this kind of listener is worth a specific
+end-to-end test (or at minimum a manual check of the server log), not just a happy-path check
+of the endpoint that published the event.
+
 ## Backend fails to start: `Required property 'collabflow.jwt.secret' not found` (or connection refused to Postgres/Redis/Kafka)
 
 **When**: running `mvn spring-boot:run` without infrastructure up, or without a `.env`/exported

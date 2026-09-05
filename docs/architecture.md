@@ -127,3 +127,34 @@ Each entry is added when that phase is actually complete, compiling, and tested 
   real running app with curl: register, duplicate-email conflict, validation errors, login,
   wrong password, protected-endpoint 401/200, refresh rotation, reuse detection revoking all
   sessions, logout, and Swagger UI/OpenAPI exposure.
+- **Phase 4 — User profile management (done)**: `GET/PATCH /api/v1/users/me`, `POST /api/v1/
+  users/me/password`. Introduced the codebase's first cross-module in-process event
+  (`user.PasswordChangedEvent`, consumed by `auth.AuthService`) rather than a direct method
+  call, specifically to avoid a module dependency cycle (`auth` already depends on `user`).
+  See "Two kinds of cross-module events" below. Caught and fixed a second real transaction
+  bug in the same session - a `@TransactionalEventListener` needs `REQUIRES_NEW`, not plain
+  `@Transactional`, to actually do write work; full writeup in `docs/troubleshooting.md`.
+  Verified end-to-end: profile view/update, wrong-current-password rejection, and - the part
+  that actually matters - a refresh token issued before a password change failing correctly
+  afterward.
+
+### Two kinds of cross-module events
+
+This codebase now has two genuinely different mechanisms for "module A tells module B
+something happened," and it's worth being able to say which is which and why:
+
+- **Kafka domain events** (from Phase 10 onward): `TaskCreatedEvent`, `TaskAssignedEvent`,
+  etc. - things a genuinely separate bounded context, or a future extracted service, would
+  plausibly want to know about. Asynchronous, at-least-once, serialized, replayable.
+- **Plain in-process Spring events** (`ApplicationEventPublisher`, first used in Phase 4 for
+  `PasswordChangedEvent`): a side effect purely internal to this one JVM, between two modules
+  that already both live here and always will as far as this decision is concerned. No
+  serialization, no broker, no "what if the consumer is down" - and, used with
+  `@TransactionalEventListener(phase = AFTER_COMMIT)`, a guarantee the listener only fires if
+  the publishing transaction actually committed.
+
+The test for which to use: would a hypothetical future separate `notification-service` or
+`audit-service` need this event over the network? If yes, it's Kafka-shaped. If it's purely
+"module A just did something module B, still in the same JVM, needs to react to," a Spring
+event is simpler and avoids paying for guarantees (ordering across a partition, replay,
+cross-process delivery) that don't apply.

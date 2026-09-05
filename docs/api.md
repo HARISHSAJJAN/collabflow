@@ -97,9 +97,44 @@ sessions" feature.
 ### `DELETE /sessions` (requires auth)
 Equivalent to `/logout-all`; provided as the more RESTful spelling of the same action.
 
+## Users (`/api/v1/users`) — Phase 4
+
+All endpoints require authentication and act on the caller's own account only - there is
+deliberately no way to view or edit another user's profile through this API.
+
+### `GET /me`
+```json
+{
+  "id": "f66be7a5-ebd7-4cd9-a52c-e3dd4a87f208",
+  "email": "carol@example.com",
+  "fullName": "Carol Danvers",
+  "avatarUrl": null,
+  "lastLoginAt": "2026-09-05T13:31:42Z",
+  "createdAt": "2026-09-05T13:31:41Z"
+}
+```
+
+### `PATCH /me`
+```json
+// request
+{"fullName": "Carol D.", "avatarUrl": "https://example.com/carol.png"}
+// 200 response: same shape as GET /me, updated
+```
+
+### `POST /me/password`
+```json
+// request
+{"currentPassword": "SuperSecret123", "newPassword": "NewSecret456"}
+// 204 No Content
+```
+`401 AUTHENTICATION_FAILED` if `currentPassword` doesn't match. On success, **every active
+session for this account is revoked** (see `AuthService.onPasswordChanged` and ADR-008) - the
+access/refresh tokens used to make this very call keep working only until the access token's
+normal 15-minute expiry, but the refresh token (and every other session's) is immediately
+revoked, so the user (or an attacker who had a stolen session) must log in again everywhere.
+
 ## Coming in later phases
 
-- `/api/v1/users` (Phase 4)
 - `/api/v1/teams` (Phase 5)
 - `/api/v1/projects` (Phase 6)
 - `/api/v1/tasks` (Phase 7)

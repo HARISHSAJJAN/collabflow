@@ -3,6 +3,7 @@ package com.collabflow.auth;
 import com.collabflow.auth.dto.AuthResponse;
 import com.collabflow.auth.dto.SessionResponse;
 import com.collabflow.auth.internal.RefreshTokenService;
+import com.collabflow.user.PasswordChangedEvent;
 import com.collabflow.user.UserAccountService;
 import com.collabflow.user.UserCredentials;
 import com.collabflow.user.UserSummary;
@@ -11,7 +12,10 @@ import java.util.UUID;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 
 /**
  * The auth module's public API and the only class in the codebase that is allowed to decide
@@ -96,5 +100,35 @@ public class AuthService {
         return refreshTokenService.listActiveSessions(userId).stream()
                 .map(s -> new SessionResponse(s.id(), s.userAgent(), s.ipAddress(), s.issuedAt(), s.expiresAt()))
                 .toList();
+    }
+
+    /**
+     * A password change should not leave pre-existing sessions valid - including a possible
+     * attacker's, if the change was prompted by a suspected compromise. Listening for
+     * {@link PasswordChangedEvent} (published by the user module, a plain in-process Spring
+     * event - see that class's Javadoc for why this isn't a Kafka event) rather than the user
+     * module calling back into auth directly avoids a module dependency cycle: auth already
+     * depends on user (for {@code UserAccountService}), so user must never depend on auth.
+     *
+     * <p>{@code AFTER_COMMIT} on purpose: if the password-change transaction rolls back for any
+     * reason, sessions must not be revoked for a change that never actually happened.</p>
+     *
+     * <p>Explicitly transactional here too, even though this delegates straight to the
+     * already-{@code @Transactional} {@link #logoutAllSessions}: {@code
+     * @TransactionalEventListener} only controls *when* this method runs relative to the
+     * original transaction's commit - it does not open a transaction of its own. Without this
+     * annotation, the call below is a same-class ("self") invocation that bypasses this
+     * method's own proxy, so the bulk revoke query would run with no active transaction at all
+     * and fail with {@code TransactionRequiredException} - a real bug caught by testing this
+     * end-to-end (see docs/troubleshooting.md), not a hypothetical one. Propagation must be
+     * {@code REQUIRES_NEW} specifically: Spring refuses to start an {@code @TransactionalEvent
+     * Listener} method with plain {@code REQUIRED} propagation, since by the time
+     * {@code AFTER_COMMIT} fires the original transaction is already gone - there is nothing
+     * left to "require" joining.</p>
+     */
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void onPasswordChanged(PasswordChangedEvent event) {
+        logoutAllSessions(event.userId());
     }
 }
