@@ -48,10 +48,21 @@ spring:
       group-id: collabflow-backend
       auto-offset-reset: earliest
       enable-auto-commit: false
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
       properties:
         spring.json.trusted.packages: "com.collabflow.*"
+        # add.type.headers: this is a single-codebase modular monolith, so every producer and
+        # consumer shares the same Java event record classes - using the __TypeId__ header for
+        # exact-type deserialization is simpler than a discriminator field here. A genuinely
+        # polyglot system (or one where producer/consumer live in separate deployables with
+        # independently evolving code) would use a schema registry or an explicit "eventType"
+        # discriminator field instead, precisely to avoid coupling the wire format to a Java
+        # class name. See docs/kafka.md.
         spring.json.add.type.headers: true
     producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
       acks: all
       properties:
         enable.idempotence: true

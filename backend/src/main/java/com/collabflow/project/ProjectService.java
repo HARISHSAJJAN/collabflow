@@ -3,6 +3,8 @@ package com.collabflow.project;
 import com.collabflow.common.exception.ConflictException;
 import com.collabflow.common.exception.ResourceNotFoundException;
 import com.collabflow.common.web.PageResponse;
+import com.collabflow.kafka.DomainEventPublisher;
+import com.collabflow.kafka.KafkaTopics;
 import com.collabflow.project.internal.Project;
 import com.collabflow.project.internal.ProjectMember;
 import com.collabflow.project.internal.ProjectMemberRepository;
@@ -45,18 +47,21 @@ public class ProjectService {
     private final TeamService teamService;
     private final UserAccountService userAccountService;
     private final ApplicationEventPublisher eventPublisher;
+    private final DomainEventPublisher domainEventPublisher;
 
     public ProjectService(
             ProjectRepository projectRepository,
             ProjectMemberRepository projectMemberRepository,
             TeamService teamService,
             UserAccountService userAccountService,
-            ApplicationEventPublisher eventPublisher) {
+            ApplicationEventPublisher eventPublisher,
+            DomainEventPublisher domainEventPublisher) {
         this.projectRepository = projectRepository;
         this.projectMemberRepository = projectMemberRepository;
         this.teamService = teamService;
         this.userAccountService = userAccountService;
         this.eventPublisher = eventPublisher;
+        this.domainEventPublisher = domainEventPublisher;
     }
 
     @Transactional
@@ -64,7 +69,9 @@ public class ProjectService {
         teamService.requireAtLeast(teamId, requestingUserId, TeamRole.ADMIN);
         Project project = projectRepository.saveAndFlush(new Project(teamId, name.trim(), blankToNull(description), requestingUserId));
         projectMemberRepository.saveAndFlush(new ProjectMember(project.getId(), requestingUserId));
-        eventPublisher.publishEvent(new ProjectCreatedEvent(project.getId(), teamId, project.getName(), requestingUserId));
+        ProjectCreatedEvent event = new ProjectCreatedEvent(project.getId(), teamId, project.getName(), requestingUserId);
+        eventPublisher.publishEvent(event);
+        domainEventPublisher.publish(KafkaTopics.PROJECT_EVENTS, project.getId().toString(), event);
         return toResponse(project);
     }
 

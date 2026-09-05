@@ -227,3 +227,23 @@ cross-process delivery) that don't apply.
   appearing with the correct TTL, eviction on a role change followed by re-population with
   the *new* correct role (not the stale one), and the rate limiter hitting its capacity
   (`429`) and correctly resetting after its window elapsed.
+- **Phase 10 — Kafka events (done)**: `kafka` infrastructure module (`DomainEventPublisher`,
+  publishing after transaction commit; `KafkaConsumerConfig`'s retry+dead-letter policy) and
+  the `notification` module's consumer side, built here rather than waiting for the brief's
+  own "Phase 11" because Kafka's consumer side needed a real consumer to actually demonstrate
+  consumption - see docs/decisions.md and docs/kafka.md. Task/project/team/comment services now
+  dual-publish: the existing Phase 8 in-process Spring event (for `audit`) plus a new Kafka
+  publish (for `notification`). **Found two real, sequential idempotent-consumer bugs by
+  mechanically forcing message redelivery** (resetting the consumer group's offsets and
+  replaying already-processed messages) - not by reasoning about the code: (1) a manually-
+  assigned `@Id` made Spring Data JPA's `save()` silently upsert instead of insert, so a
+  "duplicate" key check never actually triggered; (2) after fixing that, catching the
+  resulting constraint-violation exception one call away in its own `REQUIRES_NEW` transaction
+  still threw `UnexpectedRollbackException`, because `JpaRepository`'s own transactional
+  advice marked that transaction rollback-only before the catch block ran. Final fix: an
+  atomic, exception-free `INSERT ... ON CONFLICT DO NOTHING`. Full writeup in ADR-004 and
+  docs/troubleshooting.md. Verified end-to-end: the full produce → broker → consumer-group →
+  idempotent-write → notification pipeline for task assignment, status change, comment
+  fan-out (with per-recipient dedup keys), and team membership; self-actions correctly
+  suppress their own notification; and - the part that actually matters - replaying the exact
+  same message backlog twice produces exactly one notification per event, not two.

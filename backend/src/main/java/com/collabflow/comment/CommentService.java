@@ -5,6 +5,8 @@ import com.collabflow.comment.internal.CommentRepository;
 import com.collabflow.common.exception.ForbiddenOperationException;
 import com.collabflow.common.exception.ResourceNotFoundException;
 import com.collabflow.common.web.PageResponse;
+import com.collabflow.kafka.DomainEventPublisher;
+import com.collabflow.kafka.KafkaTopics;
 import com.collabflow.project.ProjectService;
 import com.collabflow.task.TaskService;
 import com.collabflow.task.TaskSummary;
@@ -34,18 +36,21 @@ public class CommentService {
     private final ProjectService projectService;
     private final UserAccountService userAccountService;
     private final ApplicationEventPublisher eventPublisher;
+    private final DomainEventPublisher domainEventPublisher;
 
     public CommentService(
             CommentRepository commentRepository,
             TaskService taskService,
             ProjectService projectService,
             UserAccountService userAccountService,
-            ApplicationEventPublisher eventPublisher) {
+            ApplicationEventPublisher eventPublisher,
+            DomainEventPublisher domainEventPublisher) {
         this.commentRepository = commentRepository;
         this.taskService = taskService;
         this.projectService = projectService;
         this.userAccountService = userAccountService;
         this.eventPublisher = eventPublisher;
+        this.domainEventPublisher = domainEventPublisher;
     }
 
     @Transactional
@@ -54,7 +59,9 @@ public class CommentService {
         projectService.requireProjectAccess(task.projectId(), requestingUserId);
 
         Comment saved = commentRepository.saveAndFlush(new Comment(taskId, requestingUserId, body.trim()));
-        eventPublisher.publishEvent(new CommentCreatedEvent(saved.getId(), taskId, task.projectId(), requestingUserId));
+        CommentCreatedEvent event = new CommentCreatedEvent(saved.getId(), taskId, task.projectId(), requestingUserId);
+        eventPublisher.publishEvent(event);
+        domainEventPublisher.publish(KafkaTopics.COMMENT_EVENTS, taskId.toString(), event);
         return toResponse(saved);
     }
 

@@ -319,5 +319,27 @@ Populated automatically from domain events - see `AuditService`'s Javadoc. Curre
 actions: `PROJECT_CREATED`, `TASK_CREATED`, `TASK_ASSIGNED`, `TASK_STATUS_CHANGED`,
 `TASK_PRIORITY_CHANGED`, `COMMENT_ADDED`, `MEMBER_ADDED`, `MEMBER_REMOVED`.
 
+## Notifications (`/api/v1/notifications`) — Phase 10
+
+Built alongside Kafka rather than waiting for Phase 11 - see docs/decisions.md. All endpoints
+require authentication and act only on the caller's own notifications.
+
+### `GET /?page=&size=` — my notifications, newest first (paginated)
+```json
+{"content": [{"id": "...", "type": "TASK_ASSIGNED", "payload": "{\"taskId\":\"...\",...}", "read": false, "createdAt": "..."}], "page": 0, "size": 20, ...}
+```
+`type` is one of `TASK_ASSIGNED`, `TASK_STATUS_CHANGED`, `COMMENT_ADDED`, `TEAM_MEMBER_ADDED`
+(produced today), plus `TASK_MENTION`, `DUE_DATE_APPROACHING` (defined, not yet produced by
+anything - see `NotificationType`'s Javadoc). `payload` is a JSON string whose shape depends
+on `type`.
+
+### `GET /unread-count`
+```json
+{"unreadCount": 3}
+```
+
+### `POST /{notificationId}/read` — mark one notification read
+### `POST /read-all` — mark every notification read
+
 ## Coming in later phases
-- `/api/v1/notifications` (Phase 11)
+- Real-time delivery over WebSocket (Phase 12)

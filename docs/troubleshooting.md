@@ -189,6 +189,68 @@ correct in a single-request test (there's no concurrent reader to race against) 
 breaks under real concurrent load, which is exactly the kind of bug that's cheap to prevent by
 recognizing the pattern up front and expensive to find later by testing alone.
 
+## Kafka idempotent-consumer dedup silently didn't work - twice, for two different reasons
+
+**When**: Phase 10, building the `notification` module's Kafka consumers. Tested by directly
+forcing message redelivery: reset the `notification-service` consumer group's offsets to
+earliest with `kafka-consumer-groups.sh --reset-offsets --to-earliest`, restart the app, and
+check whether already-processed messages produced duplicate notifications. (On Windows Git
+Bash, running the broker's CLI scripts via `docker exec` needs `MSYS_NO_PATHCONV=1` prefixed,
+or Git Bash mangles `/opt/kafka/bin/...` into a bogus Windows path first.)
+
+**Bug 1**: the dedup marker table, `processed_events(event_id PRIMARY KEY)`, was written via
+`processedEventRepository.saveAndFlush(new ProcessedEvent(eventId))`, expecting a duplicate
+`eventId` to violate the primary key and throw. On replay, `processed_events`' row count
+correctly stayed constant (no growth) - looking right - but the `notifications` table's
+counts *doubled*. Diagnostic logging pinned it down: the dedup check reported `firstTime=true`
+on both the original pass and the replay, for the identical `eventId`. Root cause:
+`ProcessedEvent`'s `@Id` is assigned by application code (`new ProcessedEvent(eventId)`), not
+`@GeneratedValue`. Spring Data JPA's default `isNew()` heuristic ("is the id field null?") is
+therefore always `false`, so `save()` silently called `EntityManager.merge()` (an upsert)
+instead of `persist()` (an insert) - on every call, including the first. `merge()` on an
+already-existing id just updates that row; it never violates the primary key, so the
+"duplicate" check never actually fires. Fixed by implementing `Persistable<UUID>` on
+`ProcessedEvent`, with an explicit `isNew()` that's `true` for the application-code
+constructor and `false` for the JPA no-arg one (see that class's Javadoc) - now `save()`
+genuinely inserts.
+
+**Bug 2** (found immediately after fixing Bug 1, on the next replay): with a real insert now
+happening, a genuine duplicate correctly raised `DataIntegrityViolationException` - caught
+inside `EventDeduplicationService.tryMarkProcessed`, its own `@Transactional(propagation =
+REQUIRES_NEW)` bean/method, the exact pattern that had already fixed two earlier propagation
+bugs in this project (Phases 3 and 4). This time the message logs showed
+`org.springframework.transaction.UnexpectedRollbackException: Transaction silently rolled
+back because it has been marked as rollback-only` on every "duplicate," instead of a clean
+`false`. Root cause: `JpaRepository`'s own transactional advice around `saveAndFlush` sees the
+constraint-violation exception *before* it ever reaches the application's `catch` block, and
+marks the (REQUIRES_NEW) transaction rollback-only right then - a mark that catching the
+exception one line later in application code cannot undo. When the method then returns
+normally, Spring's transaction interceptor tries to commit a transaction already marked
+rollback-only, and that's what throws `UnexpectedRollbackException` - which propagated up
+into the Kafka listener's own catch block and triggered a retry/dead-letter cycle for what
+was actually a routine, correctly-detected duplicate.
+
+**Final fix**: stop relying on an exception at all. `ProcessedEventRepository.tryInsert` uses
+a native, atomic `INSERT ... ON CONFLICT DO NOTHING` and returns the affected-row count (0 =
+duplicate, 1 = new). No exception, so no transaction is ever marked rollback-only, and the
+marker insert and the notification insert now safely share one ordinary transaction -
+simpler than either of the two previous attempts, and correct: a genuine failure saving the
+notification now rolls back the marker too, instead of permanently marking a
+never-actually-notified event as done.
+
+**Takeaway**: two lessons, not one. (1) An entity with a manually-assigned id needs
+`Persistable` or Spring Data will quietly turn every `save()` into an upsert - a duplicate key
+that should be impossible will simply never be detected. (2) Catching a persistence exception
+one call away, even in a dedicated `REQUIRES_NEW` transaction, is not always enough - if the
+failing call itself carries its own transactional advice (as `JpaRepository` methods do), that
+advice can mark the transaction rollback-only before your `catch` block runs. When a "this
+might legitimately fail, and that's fine" check can be expressed as a plain atomic
+SQL operation instead (`ON CONFLICT DO NOTHING`, `UPDATE ... WHERE ...` returning a row count),
+prefer that over catch-and-continue around an ORM `save()` - it sidesteps this whole class of
+problem rather than working around it. Both bugs were found the same way: not by reading the
+code and reasoning about it, but by mechanically forcing the exact scenario (message
+redelivery) and checking the database afterward.
+
 ## Backend fails to start: `Required property 'collabflow.jwt.secret' not found` (or connection refused to Postgres/Redis/Kafka)
 
 **When**: running `mvn spring-boot:run` without infrastructure up, or without a `.env`/exported

@@ -5,6 +5,8 @@ import com.collabflow.common.exception.ConflictException;
 import com.collabflow.common.exception.ForbiddenOperationException;
 import com.collabflow.common.exception.ResourceNotFoundException;
 import com.collabflow.common.web.PageResponse;
+import com.collabflow.kafka.DomainEventPublisher;
+import com.collabflow.kafka.KafkaTopics;
 import com.collabflow.team.internal.Team;
 import com.collabflow.team.internal.TeamMember;
 import com.collabflow.team.internal.TeamMemberRepository;
@@ -60,18 +62,21 @@ public class TeamService {
     private final UserAccountService userAccountService;
     private final ApplicationEventPublisher eventPublisher;
     private final RedisCacheService cacheService;
+    private final DomainEventPublisher domainEventPublisher;
 
     public TeamService(
             TeamRepository teamRepository,
             TeamMemberRepository teamMemberRepository,
             UserAccountService userAccountService,
             ApplicationEventPublisher eventPublisher,
-            RedisCacheService cacheService) {
+            RedisCacheService cacheService,
+            DomainEventPublisher domainEventPublisher) {
         this.teamRepository = teamRepository;
         this.teamMemberRepository = teamMemberRepository;
         this.userAccountService = userAccountService;
         this.eventPublisher = eventPublisher;
         this.cacheService = cacheService;
+        this.domainEventPublisher = domainEventPublisher;
     }
 
     @Transactional
@@ -136,7 +141,9 @@ public class TeamService {
             throw new ConflictException("This user is already a member of the team");
         }
         TeamMember saved = teamMemberRepository.saveAndFlush(new TeamMember(teamId, newMember.id(), TeamRole.MEMBER));
-        eventPublisher.publishEvent(new MemberAddedEvent(teamId, newMember.id(), requestingUserId));
+        MemberAddedEvent addedEvent = new MemberAddedEvent(teamId, newMember.id(), requestingUserId);
+        eventPublisher.publishEvent(addedEvent);
+        domainEventPublisher.publish(KafkaTopics.TEAM_EVENTS, teamId.toString(), addedEvent);
         return new TeamMemberResponse(newMember.id(), newMember.email(), newMember.fullName(), newMember.avatarUrl(), saved.getRole(), saved.getJoinedAt());
     }
 
@@ -152,7 +159,9 @@ public class TeamService {
         }
         teamMemberRepository.delete(target);
         cacheService.evictAfterCommit(roleCacheKey(teamId, targetUserId));
-        eventPublisher.publishEvent(new MemberRemovedEvent(teamId, targetUserId, requestingUserId));
+        MemberRemovedEvent removedEvent = new MemberRemovedEvent(teamId, targetUserId, requestingUserId);
+        eventPublisher.publishEvent(removedEvent);
+        domainEventPublisher.publish(KafkaTopics.TEAM_EVENTS, teamId.toString(), removedEvent);
     }
 
     @Transactional

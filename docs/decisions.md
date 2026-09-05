@@ -8,7 +8,7 @@ standard Context / Decision / Alternatives / Consequences / Trade-offs format.
 | [ADR-001](adr/ADR-001-modular-monolith.md) | Modular monolith instead of microservices | Accepted |
 | [ADR-002](adr/ADR-002-postgresql.md) | Why PostgreSQL | Accepted |
 | [ADR-003](adr/ADR-003-redis.md) | Why Redis | Accepted |
-| ADR-004 | Why Kafka | Planned — Phase 10 |
+| [ADR-004](adr/ADR-004-kafka.md) | Why Kafka | Accepted |
 | ADR-005 | Why WebSockets (STOMP over raw WebSocket) | Planned — Phase 12 |
 | [ADR-006](adr/ADR-006-optimistic-locking.md) | Why optimistic locking for task updates | Accepted |
 | ADR-007 | Why REST (not GraphQL) | Planned — Phase 6 |
@@ -62,6 +62,14 @@ relevant code's Javadoc and cross-referenced here so they're easy to find:
   normal, low-risk moderation action - while editing someone else's comment content stays
   author-only with no exception, since rewriting what someone else said is a different,
   higher-risk kind of action than removing it.
+- **The notification feature was mostly built in Phase 10, ahead of the brief's own "Phase
+  11: Notifications"** (see docs/kafka.md's opening note and the V8 migration's comment):
+  Kafka's consumer side needs a real, meaningful consumer to actually demonstrate consumption
+  (offsets, consumer groups, idempotent processing) rather than a throwaway demo listener, and
+  "create a notification when a relevant event arrives" is exactly that consumer. What's left
+  for Phase 11 is narrow: due-date-approaching notifications (needs a scheduled job, since
+  nothing "happens" to trigger it) and `TASK_MENTION` (parsing @mentions out of comment text).
+  Phase 12 adds real-time WebSocket delivery on top of what's already being created here.
 - **No cross-module JPA associations, ever** (first established Phase 5, `Team.java`'s
   Javadoc; see also `docs/database.md`'s "Cross-module foreign keys" section): every
   reference from one module's entity to a row owned by another module is a plain UUID column

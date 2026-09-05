@@ -4,6 +4,8 @@ import com.collabflow.common.exception.ConflictException;
 import com.collabflow.common.exception.ForbiddenOperationException;
 import com.collabflow.common.exception.ResourceNotFoundException;
 import com.collabflow.common.web.PageResponse;
+import com.collabflow.kafka.DomainEventPublisher;
+import com.collabflow.kafka.KafkaTopics;
 import com.collabflow.project.ProjectService;
 import com.collabflow.task.internal.Task;
 import com.collabflow.task.internal.TaskLabel;
@@ -44,16 +46,30 @@ public class TaskService {
     private final TaskLabelRepository taskLabelRepository;
     private final ProjectService projectService;
     private final ApplicationEventPublisher eventPublisher;
+    private final DomainEventPublisher domainEventPublisher;
 
     public TaskService(
             TaskRepository taskRepository,
             TaskLabelRepository taskLabelRepository,
             ProjectService projectService,
-            ApplicationEventPublisher eventPublisher) {
+            ApplicationEventPublisher eventPublisher,
+            DomainEventPublisher domainEventPublisher) {
         this.taskRepository = taskRepository;
         this.taskLabelRepository = taskLabelRepository;
         this.projectService = projectService;
         this.eventPublisher = eventPublisher;
+        this.domainEventPublisher = domainEventPublisher;
+    }
+
+    /**
+     * Publishes to both channels described in docs/architecture.md's "Two kinds of
+     * cross-module events": the in-process Spring event (fast, same-JVM, consumed today by
+     * {@code audit}) and the Kafka topic (for out-of-process consumers - today,
+     * {@code notification}, added in Phase 10/11).
+     */
+    private void publishBoth(Object event, String topic, UUID aggregateKey) {
+        eventPublisher.publishEvent(event);
+        domainEventPublisher.publish(topic, aggregateKey.toString(), event);
     }
 
     @Transactional
@@ -69,9 +85,9 @@ public class TaskService {
         Task task = new Task(projectId, title.trim(), blankToNull(description), priority, dueDate, requestingUserId);
         task.setAssigneeId(assigneeId);
         Task saved = taskRepository.saveAndFlush(task);
-        eventPublisher.publishEvent(new TaskCreatedEvent(saved.getId(), projectId, saved.getTitle(), requestingUserId));
+        publishBoth(new TaskCreatedEvent(saved.getId(), projectId, saved.getTitle(), requestingUserId), KafkaTopics.TASK_EVENTS, saved.getId());
         if (assigneeId != null) {
-            eventPublisher.publishEvent(new TaskAssignedEvent(saved.getId(), projectId, assigneeId, requestingUserId));
+            publishBoth(new TaskAssignedEvent(saved.getId(), projectId, assigneeId, requestingUserId), KafkaTopics.TASK_EVENTS, saved.getId());
         }
         return toResponse(saved, List.of());
     }
@@ -109,7 +125,7 @@ public class TaskService {
         task.setDueDate(dueDate);
         Task saved = taskRepository.saveAndFlush(task);
         if (priority != null && priority != oldPriority) {
-            eventPublisher.publishEvent(new TaskPriorityChangedEvent(taskId, task.getProjectId(), oldPriority, priority, requestingUserId));
+            publishBoth(new TaskPriorityChangedEvent(taskId, task.getProjectId(), oldPriority, priority, requestingUserId), KafkaTopics.TASK_EVENTS, taskId);
         }
         return toResponse(saved, labelsOf(taskId));
     }
@@ -122,7 +138,7 @@ public class TaskService {
         task.setStatus(newStatus);
         Task saved = taskRepository.saveAndFlush(task);
         if (newStatus != oldStatus) {
-            eventPublisher.publishEvent(new TaskStatusChangedEvent(taskId, task.getProjectId(), oldStatus, newStatus, requestingUserId));
+            publishBoth(new TaskStatusChangedEvent(taskId, task.getProjectId(), oldStatus, newStatus, requestingUserId), KafkaTopics.TASK_EVENTS, taskId);
         }
         return toResponse(saved, labelsOf(taskId));
     }
@@ -139,7 +155,7 @@ public class TaskService {
         }
         task.setAssigneeId(newAssigneeId);
         Task saved = taskRepository.saveAndFlush(task);
-        eventPublisher.publishEvent(new TaskAssignedEvent(taskId, task.getProjectId(), newAssigneeId, requestingUserId));
+        publishBoth(new TaskAssignedEvent(taskId, task.getProjectId(), newAssigneeId, requestingUserId), KafkaTopics.TASK_EVENTS, taskId);
         return toResponse(saved, labelsOf(taskId));
     }
 
