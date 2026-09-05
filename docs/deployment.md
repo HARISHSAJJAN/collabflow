@@ -63,9 +63,38 @@ honestly not claiming the capability yet. The service definition is removed for 
 comment in `docker-compose.yml` pointing back here, and will return once the frontend phase
 actually produces something to containerize.
 
-## CI/CD
+## CI/CD (Phase 17)
 
-Planned for Phase 17 (GitHub Actions) - not yet implemented. `.github/dependabot.yml` (Phase 15)
-already has a `github-actions` ecosystem entry ready for whenever workflow files land, so
-Dependabot starts patching the actions themselves from day one instead of needing a second
-follow-up change.
+`.github/workflows/ci.yml`, two jobs, run on every push and pull request against `main`:
+
+1. **`test`**: sets up JDK 21 (Temurin, `actions/setup-java`'s built-in Maven cache) and runs
+   `mvn test` - the real Testcontainers-backed suite from `docs/testing.md`, not a mocked
+   subset. GitHub's `ubuntu-latest` runners have Docker available by default, so this needs no
+   extra setup, the same way it needs none in local development. Surefire's report directory is
+   uploaded as a build artifact on every run (`if: always()`), so a failure's test reports are
+   inspectable from the Actions UI without re-running anything locally.
+2. **`docker-build`** (`needs: test` - never builds/publishes an image from code that didn't
+   even pass its own tests): builds `backend/Dockerfile` with Buildx, using the GitHub Actions
+   cache backend (`cache-from`/`cache-to: type=gha`) so unchanged layers don't get rebuilt on
+   every run. On an actual push to `main` (never for a pull request, including one from a
+   fork that wouldn't have permission to push packages here anyway), logs into GHCR with the
+   automatically-provided `GITHUB_TOKEN` (no extra secret to create or rotate) and pushes the
+   image tagged both `:latest` and `:<commit-sha>`.
+
+A `concurrency` group keyed on the branch/PR ref cancels a still-running CI job the moment a
+newer commit supersedes it - no value in finishing a build for a commit nobody will look at.
+
+**Verified, not just written**: pushed the workflow, watched it run with `gh run watch`, hit a
+real failure (GHCR rejects a tag containing uppercase characters, and this repo's owner name
+has them - `github.repository_owner` can't be used directly in an image tag), fixed it with a
+small shell step that lowercases the owner name before it's used, pushed again, watched it go
+green, and then confirmed the pushed image is genuinely public by pulling it with Docker on a
+machine logged out of GHCR entirely (`docker pull ghcr.io/harishsajjan/collabflow-backend
+:latest` succeeded with zero authentication).
+
+**A pre-existing Dependabot failure, understood and left alone**: `.github/dependabot.yml`'s
+`github-actions` ecosystem entry (added in Phase 15, before any workflow existed) failed its
+first scheduled run with `dependency_file_not_found` - there was nothing to scan yet, since
+`.github/workflows/` was empty at the time. This is expected, not a misconfiguration: Dependabot
+re-scans on its own schedule, and the very next run after this phase's workflow file landed has
+something to find.

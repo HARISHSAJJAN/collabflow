@@ -1,5 +1,7 @@
 # CollabFlow
 
+[![CI](https://github.com/HARISHSAJJAN/collabflow/actions/workflows/ci.yml/badge.svg)](https://github.com/HARISHSAJJAN/collabflow/actions/workflows/ci.yml)
+
 A distributed project & team collaboration platform (Jira/Trello/Slack-inspired) built as a
 **modular monolith** — a single Spring Boot backend with strongly separated domain modules,
 a PostgreSQL database, Redis caching, Kafka-based eventing, and WebSocket real-time updates.
@@ -12,7 +14,7 @@ implemented yet.
 ## Status
 
 Under active, phased development. See `docs/architecture.md` → "Development phase log" for
-exactly which phases are complete. Currently: **Phase 16 (Docker) done.**
+exactly which phases are complete. Currently: **Phase 17 (CI/CD) done.**
 
 ## Why this project exists
 

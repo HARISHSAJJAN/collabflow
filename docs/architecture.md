@@ -342,3 +342,12 @@ cross-process delivery) that don't apply.
   pointing at a `./frontend` directory with no code in it yet - is removed for now rather than
   left to fail `docker compose up` outright; see `docs/deployment.md` for why and when it comes
   back.
+
+- **Phase 17 — CI/CD (done)**: `.github/workflows/ci.yml` - GitHub Actions runs the real
+  Testcontainers-backed test suite on every push/PR, then (gated on those tests passing) builds
+  `backend/Dockerfile` and pushes it to GHCR on pushes to `main`. Full writeup in
+  `docs/deployment.md`, including a real bug the first run caught (GHCR rejects a tag with
+  uppercase characters; this repo's owner name has them) and its fix, plus confirming the
+  pushed image is genuinely public by pulling it with zero authentication from a machine logged
+  out of GHCR. Also explains a pre-existing Dependabot failure from Phase 15 (nothing to scan
+  before this phase's workflow file existed) that this phase's own commit resolves on its own.
