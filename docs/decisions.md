@@ -6,7 +6,7 @@ standard Context / Decision / Alternatives / Consequences / Trade-offs format.
 | ADR | Title | Status |
 |---|---|---|
 | [ADR-001](adr/ADR-001-modular-monolith.md) | Modular monolith instead of microservices | Accepted |
-| ADR-002 | Why PostgreSQL | Planned — Phase 2 |
+| [ADR-002](adr/ADR-002-postgresql.md) | Why PostgreSQL | Accepted |
 | ADR-003 | Why Redis | Planned — Phase 9 |
 | ADR-004 | Why Kafka | Planned — Phase 10 |
 | ADR-005 | Why WebSockets (STOMP over raw WebSocket) | Planned — Phase 12 |

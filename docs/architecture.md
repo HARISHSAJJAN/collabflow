@@ -113,3 +113,7 @@ Each entry is added when that phase is actually complete, compiling, and tested 
   package-per-module layout with Spring Modulith module markers, `application.yml` with
   externalized config, `docker-compose.yml` for Postgres/Redis/Kafka (KRaft, single broker),
   `.env.example`, ADR-001.
+- **Phase 2 — Database & migrations (done)**: Flyway wired in (`ddl-auto: validate`, never
+  `update`), `users` and `refresh_tokens` tables (V1/V2), verified applied against the real
+  Postgres container with the correct indexes/constraints. Details and indexing rationale in
+  `docs/database.md`; ADR-002 (why PostgreSQL).

@@ -12,7 +12,7 @@ implemented yet.
 ## Status
 
 Under active, phased development. See `docs/architecture.md` → "Development phase log" for
-exactly which phases are complete. Currently: **Phase 1 (architecture & repo setup) done.**
+exactly which phases are complete. Currently: **Phase 2 (database & migrations) done.**
 
 ## Why this project exists
 
