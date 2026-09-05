@@ -14,7 +14,9 @@ implemented yet.
 ## Status
 
 Under active, phased development. See `docs/architecture.md` → "Development phase log" for
-exactly which phases are complete. Currently: **Phase 19 (performance review) done.**
+exactly which phases are complete. Currently: **Phase 20 (final documentation) done — all 20 backend phases complete.** The
+frontend (React/TypeScript/Vite) is being built next; see the note below `Running locally`
+until it lands.
 
 ## Why this project exists
 
@@ -22,8 +24,7 @@ To demonstrate — and let its author honestly defend in an interview — real u
 backend architecture, REST API design, relational database design, concurrency (optimistic
 locking), caching strategy, event-driven architecture with Kafka, real-time systems with
 WebSockets, authentication/authorization, testing, containerization, and CI/CD. See
-`docs/interview-preparation.md` (added as later phases complete) for the questions this
-project is built to be able to answer.
+`docs/interview-preparation.md` for the questions this project is built to be able to answer.
 
 ## Architecture at a glance
 
@@ -60,7 +61,8 @@ Full list with reasoning: [`docs/decisions.md`](docs/decisions.md).
 ## Prerequisites
 
 - Java 21 (JDK)
-- Maven 3.9+ (or use the included wrapper once added)
+- Maven 3.9+ (or use `backend/mvnw` / `mvnw.cmd`, which downloads a pinned Maven version - no
+  separate Maven install required)
 - Docker + Docker Compose
 - Node.js 20+ (frontend only)
 

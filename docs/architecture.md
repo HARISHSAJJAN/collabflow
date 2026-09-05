@@ -376,3 +376,17 @@ cross-process delivery) that don't apply.
   Hibernate issued before and after (21 queries for a 20-row page → 2) and confirming the
   batched version still returns the exactly-correct labels per task. Full numbers, methodology,
   and honest caveats about what this test does and doesn't prove in `docs/performance.md`.
+
+- **Phase 20 — Final documentation (done)**: the last backend-focused phase. ADR-007 ("REST,
+  not GraphQL") written - the one ADR left as "Planned" since the project's early phases - with
+  the same structure as every other ADR here (context, decision, alternatives genuinely
+  weighed, consequences, interviewer questions). `docs/interview-preparation.md` added,
+  consolidating every ADR's and `docs/security.md`'s own "interviewer questions" section into
+  one question bank, plus general/behavioral questions spanning testing, Docker, CI/CD,
+  observability, and performance. A Maven wrapper (`backend/mvnw`/`mvnw.cmd`) was also added -
+  a loose end from the README's "Prerequisites" section, which had promised one "once added"
+  since Phase 1 - with a `.gitattributes` entry forcing `mvnw` to keep Unix line endings
+  regardless of this project's Windows-side `core.autocrlf` setting, since a CRLF shell script
+  fails outright on Linux CI. All 20 originally-planned backend phases are now complete; the
+  React/TypeScript/Vite frontend (always scoped as secondary to the backend/architecture focus
+  - see the README's "Why this project exists") is the remaining work.

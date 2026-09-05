@@ -1,0 +1,6 @@
+# mvnw must always keep Unix line endings - it's a shell script, and CI (Linux) checking out a
+# CRLF version would fail immediately with a "bad interpreter" error. Committed independent of
+# this machine's core.autocrlf=true, which would otherwise normalize it based on local checkout
+# settings rather than what the file actually needs to be.
+/backend/mvnw text eol=lf
+/backend/mvnw.cmd text eol=crlf

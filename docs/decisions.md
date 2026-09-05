@@ -11,7 +11,7 @@ standard Context / Decision / Alternatives / Consequences / Trade-offs format.
 | [ADR-004](adr/ADR-004-kafka.md) | Why Kafka | Accepted |
 | [ADR-005](adr/ADR-005-websockets.md) | Why WebSockets (STOMP over raw WebSocket) | Accepted |
 | [ADR-006](adr/ADR-006-optimistic-locking.md) | Why optimistic locking for task updates | Accepted |
-| ADR-007 | Why REST (not GraphQL) | Planned — Phase 6 |
+| [ADR-007](adr/ADR-007-rest-not-graphql.md) | Why REST (not GraphQL) | Accepted |
 | [ADR-008](adr/ADR-008-jwt-and-refresh-tokens.md) | Why JWT access + refresh tokens (not server sessions) | Accepted |
 
 ADRs are added as the corresponding phase of `docs/architecture.md`'s development log is
