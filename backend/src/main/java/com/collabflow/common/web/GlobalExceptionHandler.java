@@ -3,6 +3,7 @@ package com.collabflow.common.web;
 import com.collabflow.common.exception.BadRequestException;
 import com.collabflow.common.exception.ConflictException;
 import com.collabflow.common.exception.ForbiddenOperationException;
+import com.collabflow.common.exception.RateLimitExceededException;
 import com.collabflow.common.exception.ResourceNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
@@ -46,6 +47,12 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiError> handleHandlerValidation(HandlerMethodValidationException ex, HttpServletRequest req) {
         return ResponseEntity.badRequest()
                 .body(ApiError.of(400, "VALIDATION_ERROR", "Request parameters failed validation", req.getRequestURI()));
+    }
+
+    @ExceptionHandler(RateLimitExceededException.class)
+    public ResponseEntity<ApiError> handleRateLimit(RateLimitExceededException ex, HttpServletRequest req) {
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .body(ApiError.of(429, "RATE_LIMIT_EXCEEDED", ex.getMessage(), req.getRequestURI()));
     }
 
     @ExceptionHandler(BadRequestException.class)

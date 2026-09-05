@@ -50,6 +50,18 @@ in-process event that revokes every refresh token for the account (see
 Surfaced a real `@TransactionalEventListener` propagation bug while testing this (see
 `docs/troubleshooting.md`): the first implementation silently failed to revoke anything.
 
+### Rate limiting on login and registration (Phase 9)
+A Redis-backed fixed-window counter (`RateLimiter`), keyed by client IP, rejects excess
+`POST /api/v1/auth/login` and `/register` calls with `429 RATE_LIMIT_EXCEEDED`. Fails open on
+a Redis outage (allows requests through) - a deliberate, debatable trade-off documented on
+`RateLimiter`'s Javadoc and in `docs/redis.md`. Does not yet limit by submitted email/identity
+(only by IP) - see the gaps table below.
+
+### Team/project role-based authorization (Phases 5-7)
+OWNER/ADMIN/MEMBER enforced in `TeamService`/`ProjectService`/`TaskService` - see those
+classes' Javadoc and `docs/decisions.md` for the exact policy per action. Never enforced only
+on the frontend; every check happens server-side before the corresponding write.
+
 ### Secure-by-default authorization (Phase 3)
 `SecurityConfig`'s endpoint rules are an explicit allow-list for *public* endpoints;
 `.anyRequest().authenticated()` is the fallback. A new controller added later requires
@@ -60,9 +72,8 @@ accidentally public by omission.
 
 | Gap | Planned phase | Why it's not done yet |
 |---|---|---|
-| Rate limiting on login/register/refresh | Phase 9 | Depends on Redis, which lands in Phase 9. Until then these endpoints have no brute-force throttling beyond normal infra-level limits. |
-| Refresh-token/expired-session cleanup job | Phase 9 (alongside rate limiting infra) | The `ix_refresh_tokens_expires_at` index exists for this; the scheduled job itself isn't written yet - old revoked/expired rows just accumulate. |
-| Team/project-level authorization (RBAC) | Phase 5-7 | No teams or projects exist yet; only account-level authentication exists so far. |
+| Per-email (not just per-IP) login rate limiting | Not yet planned | A distributed brute force against one account from many IPs would not be caught by the current IP-only limiter. See `AuthController`'s Javadoc. |
+| Refresh-token/expired-session cleanup job | Not yet planned | The `ix_refresh_tokens_expires_at` index exists for this; the scheduled job itself isn't written yet - old revoked/expired rows just accumulate. |
 | Secure response headers (HSTS, CSP, X-Content-Type-Options, etc.) | Phase 15 | Deferred to the dedicated security-hardening phase. |
 | Dependency vulnerability scanning | Phase 15 / 17 (CI) | Not yet wired into the build. |
 | CSRF reconsideration if cookie-based auth is ever added | N/A unless the auth transport changes | See "Stateless sessions" above - not a gap under the current design, but the assumption to revisit if that design changes. |

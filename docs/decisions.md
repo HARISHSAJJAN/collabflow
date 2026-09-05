@@ -7,7 +7,7 @@ standard Context / Decision / Alternatives / Consequences / Trade-offs format.
 |---|---|---|
 | [ADR-001](adr/ADR-001-modular-monolith.md) | Modular monolith instead of microservices | Accepted |
 | [ADR-002](adr/ADR-002-postgresql.md) | Why PostgreSQL | Accepted |
-| ADR-003 | Why Redis | Planned — Phase 9 |
+| [ADR-003](adr/ADR-003-redis.md) | Why Redis | Accepted |
 | ADR-004 | Why Kafka | Planned — Phase 10 |
 | ADR-005 | Why WebSockets (STOMP over raw WebSocket) | Planned — Phase 12 |
 | [ADR-006](adr/ADR-006-optimistic-locking.md) | Why optimistic locking for task updates | Accepted |

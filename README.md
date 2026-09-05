@@ -12,7 +12,7 @@ implemented yet.
 ## Status
 
 Under active, phased development. See `docs/architecture.md` → "Development phase log" for
-exactly which phases are complete. Currently: **Phase 8 (comments and activity history) done.**
+exactly which phases are complete. Currently: **Phase 9 (Redis caching and rate limiting) done.**
 
 ## Why this project exists
 
@@ -103,6 +103,7 @@ default in `application.yml` — the app fails fast at startup if `JWT_SECRET` i
 
 - [`docs/architecture.md`](docs/architecture.md) — module boundaries, real-time flow, event flow
 - [`docs/database.md`](docs/database.md) — schema, indexes, concurrency (added Phase 2+)
+- [`docs/redis.md`](docs/redis.md) — what's cached and why, rate limiting (added Phase 9)
 - [`docs/api.md`](docs/api.md) — REST API reference (added Phase 3+)
 - [`docs/security.md`](docs/security.md) — security review (added Phase 15)
 - [`docs/deployment.md`](docs/deployment.md) — Docker/CI-CD (added Phase 16-17)

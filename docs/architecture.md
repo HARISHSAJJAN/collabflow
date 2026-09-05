@@ -209,3 +209,21 @@ cross-process delivery) that don't apply.
   with correct actor/old-value/new-value, author-only comment editing (403 for anyone else),
   ADMIN-moderated comment deletion, and the cross-module internal-package import check clean
   across all seven modules.
+- **Phase 9 — Redis caching and rate limiting (done)**: `cache` module - an explicit
+  cache-aside helper (`RedisCacheService`, deliberately not `@Cacheable`, so keys/TTLs/
+  failure handling stay visible) and a Lua-script fixed-window `RateLimiter`. Caches exactly
+  two things (see docs/redis.md for why these two and not more): `TeamService.findRole` (the
+  single hottest read - every authorized request touching a project/task/comment hits it) and
+  `UserAccountService.findSummaryById` (resolved repeatedly for display names). Deliberately
+  never caches credential lookups (`findCredentialsByEmail`) - a stale cached hash could let a
+  deactivated account or an old password keep authenticating. Rate limiting on
+  login/register, closing the gap flagged in Phase 3's docs/security.md, fails open on a Redis
+  outage (a documented, debatable trade-off) while the cache also fails open but for a
+  different reason (it's an optimization, not a security control). Found - by reasoning
+  through transaction timing, not from a failing test - and fixed a cache-invalidation race:
+  evicting a key before its transaction commits lets a concurrent reader repopulate the cache
+  with a soon-to-be-stale value; every eviction here now runs `afterCommit` via
+  `TransactionSynchronizationManager`. Verified end-to-end with `redis-cli`: a cache key
+  appearing with the correct TTL, eviction on a role change followed by re-population with
+  the *new* correct role (not the stale one), and the rate limiter hitting its capacity
+  (`429`) and correctly resetting after its window elapsed.

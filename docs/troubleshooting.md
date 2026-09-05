@@ -157,6 +157,38 @@ guarantee it. This is easy to miss because it only shows up in the response, not
 database, so a "does the data look right in the DB?" check alone won't catch it; it takes an
 end-to-end request/response test, which is exactly how this was caught.
 
+## Cache-invalidation race: evicting before commit let a concurrent read re-cache a stale value
+
+**When**: Phase 9, implementing cache invalidation for `TeamService.findRole` (evicted on
+`changeRole`/`removeMember`) and `UserAccountService.findSummaryById` (evicted on
+`updateProfile`). Caught by reasoning through the transaction timing while writing the
+eviction calls - not from an observed test failure, unlike the Phase 3-5 bugs above. It's
+included here for the same reason: the pattern (a side effect racing against its own
+transaction's commit) is real and worth recognizing on sight, whether it's caught by
+inspection or by a failing test.
+
+**Root cause**: the eviction call originally ran inside the same `@Transactional` method as
+the database write that made the cached value stale, *before* that transaction committed.
+Between the eviction and the commit, a concurrent request reading the same key would miss the
+(now-empty) cache, query PostgreSQL - which, under normal read-committed isolation, still
+shows the *pre-write* row, since this transaction hasn't committed yet - and re-cache that
+soon-to-be-stale value. Once the original transaction then committed, the cache would be left
+holding data that was already wrong, and would keep serving it until the TTL expired.
+
+**Fix**: `RedisCacheService.evictAfterCommit`, which uses
+`TransactionSynchronizationManager.registerSynchronization(...)` to defer the actual eviction
+until the transaction's `afterCommit` callback fires. By the time eviction happens, the new
+value is durably committed, so any reader that misses the cache after that point reads the
+correct, current row.
+
+**Takeaway**: this is the same family of bug as the `@TransactionalEventListener`/propagation
+issues found in Phases 3-4 (see those entries above) - a side effect's *timing relative to
+commit* matters, not just whether it eventually happens. Cache invalidation specifically
+should almost always be deferred to after-commit; evicting immediately is a trap that looks
+correct in a single-request test (there's no concurrent reader to race against) and only
+breaks under real concurrent load, which is exactly the kind of bug that's cheap to prevent by
+recognizing the pattern up front and expensive to find later by testing alone.
+
 ## Backend fails to start: `Required property 'collabflow.jwt.secret' not found` (or connection refused to Postgres/Redis/Kafka)
 
 **When**: running `mvn spring-boot:run` without infrastructure up, or without a `.env`/exported

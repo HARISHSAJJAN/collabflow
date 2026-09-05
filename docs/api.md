@@ -25,7 +25,9 @@ endpoint:
 ## Auth (`/api/v1/auth`) — Phase 3
 
 All auth endpoints are public (no `Authorization` header needed) **except** `/sessions` and
-`/logout-all`, which require a valid access token.
+`/logout-all`, which require a valid access token. `/login` and `/register` are rate-limited
+per client IP (Phase 9) - `429 RATE_LIMIT_EXCEEDED` past the configured capacity (default 5
+logins/minute, 3 registrations/hour; see `.env.example`). See `docs/redis.md`.
 
 ### `POST /register`
 ```json

@@ -1,5 +1,6 @@
 package com.collabflow.team;
 
+import com.collabflow.cache.RedisCacheService;
 import com.collabflow.common.exception.ConflictException;
 import com.collabflow.common.exception.ForbiddenOperationException;
 import com.collabflow.common.exception.ResourceNotFoundException;
@@ -10,6 +11,8 @@ import com.collabflow.team.internal.TeamMemberRepository;
 import com.collabflow.team.internal.TeamRepository;
 import com.collabflow.user.UserAccountService;
 import com.collabflow.user.UserSummary;
+import com.fasterxml.jackson.core.type.TypeReference;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -38,24 +41,37 @@ import org.springframework.transaction.annotation.Transactional;
  * non-members. This keeps one consistent rule ("can't see it, don't know it exists") instead
  * of maintaining two different denial semantics (404 vs 403) across every module that has
  * this same "must be a member" shape (team, and project in Phase 6).</p>
+ *
+ * <p><b>Why {@link #findRole} is cached</b> (see docs/redis.md for the full write-up): this
+ * one method is called on essentially every authorized request that touches a project, task,
+ * or comment (via {@code requireMembership}/{@code requireAtLeast}, in turn called by
+ * {@code ProjectService.requireProjectAccess} on every such request) - it is the single
+ * hottest read in the whole application. Only the present case (a real role) is cached, not
+ * the "not a member" case - a 404 for a non-member is not worth caching, and not caching it
+ * means the cache never actively lies about whether someone is a member.</p>
  */
 @Service
 public class TeamService {
+
+    private static final Duration ROLE_CACHE_TTL = Duration.ofMinutes(5);
 
     private final TeamRepository teamRepository;
     private final TeamMemberRepository teamMemberRepository;
     private final UserAccountService userAccountService;
     private final ApplicationEventPublisher eventPublisher;
+    private final RedisCacheService cacheService;
 
     public TeamService(
             TeamRepository teamRepository,
             TeamMemberRepository teamMemberRepository,
             UserAccountService userAccountService,
-            ApplicationEventPublisher eventPublisher) {
+            ApplicationEventPublisher eventPublisher,
+            RedisCacheService cacheService) {
         this.teamRepository = teamRepository;
         this.teamMemberRepository = teamMemberRepository;
         this.userAccountService = userAccountService;
         this.eventPublisher = eventPublisher;
+        this.cacheService = cacheService;
     }
 
     @Transactional
@@ -135,6 +151,7 @@ public class TeamService {
             throw new ConflictException("A team must always have at least one OWNER; transfer ownership before removing this member");
         }
         teamMemberRepository.delete(target);
+        cacheService.evictAfterCommit(roleCacheKey(teamId, targetUserId));
         eventPublisher.publishEvent(new MemberRemovedEvent(teamId, targetUserId, requestingUserId));
     }
 
@@ -151,6 +168,7 @@ public class TeamService {
         }
         target.setRole(newRole);
         TeamMember saved = teamMemberRepository.save(target);
+        cacheService.evictAfterCommit(roleCacheKey(teamId, targetUserId));
         UserSummary user = userAccountService.requireSummaryById(targetUserId);
         return new TeamMemberResponse(user.id(), user.email(), user.fullName(), user.avatarUrl(), saved.getRole(), saved.getJoinedAt());
     }
@@ -171,7 +189,18 @@ public class TeamService {
 
     @Transactional(readOnly = true)
     public Optional<TeamRole> findRole(UUID teamId, UUID userId) {
-        return teamMemberRepository.findByTeamIdAndUserId(teamId, userId).map(TeamMember::getRole);
+        String key = roleCacheKey(teamId, userId);
+        Optional<TeamRole> cached = cacheService.get(key, new TypeReference<TeamRole>() {});
+        if (cached.isPresent()) {
+            return cached;
+        }
+        Optional<TeamRole> role = teamMemberRepository.findByTeamIdAndUserId(teamId, userId).map(TeamMember::getRole);
+        role.ifPresent(r -> cacheService.put(key, r, ROLE_CACHE_TTL));
+        return role;
+    }
+
+    private static String roleCacheKey(UUID teamId, UUID userId) {
+        return "team:role:" + teamId + ":" + userId;
     }
 
     @Transactional(readOnly = true)
