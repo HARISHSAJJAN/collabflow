@@ -38,6 +38,12 @@ relevant code's Javadoc and cross-referenced here so they're easy to find:
   that puts team-roster changes (invite/remove/role-assign) at the OWNER level only, with
   ADMIN's membership-management power scoped to projects (Phase 6). Editing the team's
   name/description was judged a lower-risk action and opened to ADMIN as well.
+- **Project membership has no role of its own; project members draw their permissions from
+  their team role** (Phase 6, `ProjectService`'s class Javadoc and the V4 migration's
+  comment): a project-level role column would be a second source of truth that could drift
+  from the team role it would inevitably need to stay consistent with. Project visibility is
+  still asymmetric (ADMIN+ sees all of a team's projects, MEMBER only sees projects they've
+  been added to) without needing a role of its own to express that.
 - **No cross-module JPA associations, ever** (first established Phase 5, `Team.java`'s
   Javadoc; see also `docs/database.md`'s "Cross-module foreign keys" section): every
   reference from one module's entity to a row owned by another module is a plain UUID column

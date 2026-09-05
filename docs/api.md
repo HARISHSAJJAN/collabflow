@@ -187,8 +187,50 @@ future improvement, not a hidden gap - see `docs/decisions.md`.
 
 ### `DELETE /{teamId}/members/{userId}` — remove a member (OWNER only)
 
+## Projects (`/api/v1/projects`) — Phase 6
+
+All endpoints require authentication. Authorization (full reasoning in `ProjectService`'s
+Javadoc): creating a project, editing it, archiving/unarchiving, and managing membership all
+require at least ADMIN on the project's **team**. Visibility is asymmetric on purpose: a team
+OWNER/ADMIN sees every project belonging to their team; a plain team MEMBER only sees projects
+they've been explicitly added to as a project member. A project you can't see returns `404`,
+identical to a nonexistent id.
+
+### `POST /` — create a project
+```json
+// request
+{"teamId": "...", "name": "Website Redesign", "description": "Q3 relaunch"}
+// 201 response - creator is automatically added as a project member
+{"id": "...", "teamId": "...", "name": "Website Redesign", "description": "Q3 relaunch", "status": "ACTIVE", "createdBy": "...", "createdAt": "...", "updatedAt": "..."}
+```
+
+### `GET /?teamId={teamId}&status={ACTIVE|ARCHIVED}` — list projects (paginated)
+`status` is optional (omit for both). See the visibility note above - the same call returns
+different results depending on the caller's team role.
+
+### `GET /{projectId}` — project details
+
+### `PATCH /{projectId}` — update name/description (ADMIN+)
+`409 CONFLICT` if the project is archived - unarchive it first.
+
+### `POST /{projectId}/archive` / `POST /{projectId}/unarchive` (ADMIN+)
+
+### `GET /{projectId}/members` — list project members (anyone with project access)
+```json
+[{"userId": "...", "email": "...", "fullName": "...", "avatarUrl": null, "teamRole": "MEMBER", "addedAt": "..."}]
+```
+
+### `POST /{projectId}/members` — add a project member (ADMIN+)
+```json
+{"userId": "..."}
+```
+The target user must already be a member of the project's **team** - project membership is
+always a subset of team membership, never an independent pool of users. `404` if they aren't
+a team member; `409` if they're already a project member.
+
+### `DELETE /{projectId}/members/{userId}` — remove a project member (ADMIN+)
+
 ## Coming in later phases
-- `/api/v1/projects` (Phase 6)
 - `/api/v1/tasks` (Phase 7)
 - `/api/v1/comments` (Phase 8)
 - `/api/v1/notifications` (Phase 11)

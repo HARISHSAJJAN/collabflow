@@ -43,6 +43,7 @@ Migrations are managed with Flyway, versioned SQL files in
 | V1 | `V1__create_users_table.sql` | `users` | 2 |
 | V2 | `V2__create_refresh_tokens_table.sql` | `refresh_tokens` | 2 |
 | V3 | `V3__create_teams_and_team_members.sql` | `teams`, `team_members` | 5 |
+| V4 | `V4__create_projects_and_project_members.sql` | `projects`, `project_members` | 6 |
 
 ## `users`
 
@@ -114,6 +115,17 @@ SQL foreign key for integrity, and - when the referencing module needs display d
 referenced row - a call to the owning module's public service (e.g.
 `UserAccountService.findSummaryById(...)`) rather than an object graph traversal. This is a
 deliberate, consistent convention across the whole codebase, not a one-off.
+
+## `projects` / `project_members`
+
+| Table | Notable columns | Notes |
+|---|---|---|
+| `projects` | `team_id UUID REFERENCES teams(id)`, `status VARCHAR(20) CHECK (...)` | A project always belongs to exactly one team. `status` is `ACTIVE`/`ARCHIVED` (same CHECK-not-native-enum reasoning as `team_members.role`). |
+| `project_members` | unique on `(project_id, user_id)` | **No `role` column.** A project member's permissions are their *team* role, looked up at authorization time (`ProjectService`) - see the V4 migration's comment. Adding a project-level role that duplicates the team role would be two sources of truth for the same fact. |
+
+Indexes: `ix_projects_team_id_status` (a composite index serving both "all of a team's
+projects" and "a team's ACTIVE projects" - `status` alone would rarely be queried without also
+filtering by team), `ux_project_members_project_user`, `ix_project_members_user_id`.
 
 ## Connection pooling
 

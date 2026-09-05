@@ -172,3 +172,14 @@ cross-process delivery) that don't apply.
   end-to-end: team creation, non-member 404s, adding a member, MEMBER-role authorization
   boundaries (403 on admin actions), the last-owner-protection invariant (409, then success
   after promoting a second owner), post-removal 404, and pagination.
+- **Phase 6 — Projects (done)**: `project` module - projects scoped to a team, archiving, and
+  membership drawn from the team roster (never an independent user pool - adding a project
+  member requires them to already be a team member). No project-level `role` column: a
+  project member's permissions are their team role, resolved through `TeamService` at
+  authorization time. Visibility is asymmetric by design - team ADMIN+ sees every project in
+  the team, a MEMBER only sees projects they've been explicitly added to - which is what
+  reproduced the `saveAndFlush` timestamp bug's pattern in a new place (fixed the same way).
+  Verified end-to-end: MEMBER blocked from creating projects (403), the asymmetric visibility
+  rule (MEMBER sees 0 then 1 project after being added, ADMIN always sees both), a non-member
+  getting 404 on direct access, and archive → blocked-edit (409) → unarchive → edit-succeeds
+  with a correctly updated `updatedAt`.
