@@ -20,7 +20,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Set up JDK 21
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "21"
@@ -56,6 +56,13 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      # Image/repository names in a registry path must be lowercase; a GitHub username or org
+      # name is not guaranteed to be (this repo's owner isn't) - so it can't be used directly
+      # in a tag the way github.repository_owner reads.
+      - name: Compute lowercase image owner
+        id: vars
+        run: echo "owner=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
       # Only authenticate/push on an actual push to main, never for a pull request from a fork
       # (which wouldn't have permission to push packages here anyway, and shouldn't need to -
       # a PR only needs to prove the image *builds*, not publish one).
@@ -73,7 +80,7 @@ jobs:
           context: ./backend
           push: ${{ github.event_name == 'push' }}
           tags: |
-            ghcr.io/${{ github.repository_owner }}/collabflow-backend:latest
-            ghcr.io/${{ github.repository_owner }}/collabflow-backend:${{ github.sha }}
+            ghcr.io/${{ steps.vars.outputs.owner }}/collabflow-backend:latest
+            ghcr.io/${{ steps.vars.outputs.owner }}/collabflow-backend:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
