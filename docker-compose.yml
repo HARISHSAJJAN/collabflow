@@ -102,12 +102,18 @@ services:
       start_period: 30s
     networks: [collabflow]
 
-  # The "frontend" service is deliberately not defined yet: the React/TypeScript/Vite app
-  # itself doesn't exist in this repo yet (see README.md - "frontend setup instructions are
-  # added once the frontend phase begins"). Adding a service block with a build context that
-  # doesn't exist would make `docker compose up` fail outright, which is worse than simply not
-  # claiming a capability this repo doesn't have yet. It will be added back here, alongside
-  # frontend/Dockerfile, once that phase starts.
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8080}
+    container_name: collabflow-frontend
+    depends_on:
+      - backend
+    ports:
+      - "${FRONTEND_PORT:-5173}:80"
+    networks: [collabflow]
 
 networks:
   collabflow:

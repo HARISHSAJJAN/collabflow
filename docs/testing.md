@@ -61,3 +61,19 @@ through the run. Isolating each class to its own JVM keeps each class's containe
 for the few seconds that class needs them, comfortably inside whatever window this environment
 can actually sustain - at the cost of a few extra seconds of container-startup overhead per
 class, which is a good trade for a suite that otherwise fails unpredictably partway through.
+
+## Frontend: one real end-to-end test, against the real backend
+
+`frontend/e2e/smoke.spec.ts` (Playwright) - register, create a team/project/task, move it
+through the board, comment, verify everything persists across a full page reload. Same "one
+representative flow, not exhaustive coverage" philosophy as the backend suite above, and it
+already earned its keep: it found two real bugs (a drawer that didn't close on Escape, and a
+drag gesture that could trigger native text selection instead) before any user would have - see
+`docs/frontend.md` for the full writeup, including why the drag *gesture* itself is verified
+manually rather than automated (a documented Playwright/`@dnd-kit` pointer-capture limitation
+in this environment, not an app bug). Run via `npm run test:e2e` in `frontend/`, against the
+full stack already up (Postgres/Redis/Kafka, the backend, and the Vite dev server) - not run in
+CI for the same reason described in `.github/workflows/ci.yml`'s frontend job: it would need
+the entire backend stack alongside the frontend build, roughly doubling CI runtime for one
+additional layer of coverage over what the backend's own suite and a plain frontend build
+already provide.

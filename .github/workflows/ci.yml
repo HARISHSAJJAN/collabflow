@@ -43,7 +43,7 @@ jobs:
           path: backend/target/surefire-reports/
           retention-days: 7
 
-  docker-build:
+  backend-docker-build:
     name: Build backend image
     runs-on: ubuntu-latest
     needs: test
@@ -82,5 +82,67 @@ jobs:
           tags: |
             ghcr.io/${{ steps.vars.outputs.owner }}/collabflow-backend:latest
             ghcr.io/${{ steps.vars.outputs.owner }}/collabflow-backend:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  frontend:
+    name: Frontend build & typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      # Type-checks (tsc -b) and produces a production bundle - the same command a real deploy
+      # would run. The Playwright e2e suite (frontend/e2e) deliberately isn't run here: it needs
+      # the full backend stack (Postgres/Redis/Kafka + the Spring Boot app) up at the same time,
+      # which would roughly double this workflow's runtime for one additional layer of coverage
+      # over what the backend's own test suite and this build step already provide - see
+      # docs/testing.md's scope philosophy. It's a local/pre-release check for now.
+      - name: Build
+        working-directory: frontend
+        run: npm run build
+
+  frontend-docker-build:
+    name: Build frontend image
+    runs-on: ubuntu-latest
+    needs: frontend
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Compute lowercase image owner
+        id: vars
+        run: echo "owner=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GitHub Container Registry
+        if: github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and (on main) push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: ${{ github.event_name == 'push' }}
+          tags: |
+            ghcr.io/${{ steps.vars.outputs.owner }}/collabflow-frontend:latest
+            ghcr.io/${{ steps.vars.outputs.owner }}/collabflow-frontend:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

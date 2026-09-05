@@ -52,34 +52,58 @@ infrastructure service's own healthcheck (`condition: service_healthy` in
 project's Kafka setup already had to solve for KRaft (see `docs/architecture.md`), solved here
 the standard Compose way instead.
 
-### Why the `frontend` service isn't defined yet
+### Frontend Docker image
 
-`docker-compose.yml` had a `frontend` service block since Phase 1, written in anticipation of
-the frontend work - but the React/TypeScript/Vite app itself doesn't exist in this repository
-yet (see the README's "Status" section). A `build: { context: ./frontend }` block pointing at a
-directory with no `Dockerfile` (or even a `package.json`) would make `docker compose up` fail
-outright the moment anyone actually tried the full stack, which is a worse outcome than
-honestly not claiming the capability yet. The service definition is removed for now, with a
-comment in `docker-compose.yml` pointing back here, and will return once the frontend phase
-actually produces something to containerize.
+`frontend/Dockerfile` is a two-stage build: a `node:22-alpine` stage runs `npm ci` and
+`vite build` (dependencies installed from `package-lock.json` before the rest of the source is
+copied in, same layer-caching reasoning as the backend image), and the runtime stage is plain
+`nginx:1.27-alpine` serving the resulting static files - no Node.js at all in the image that
+actually runs, since a Vite production build has no server-side runtime to speak of.
+`nginx.conf` adds one thing beyond nginx's defaults: a `try_files ... /index.html` fallback, so
+a hard refresh on a client-routed path like `/teams/<id>` doesn't 404 against a server that has
+no idea what that path is - React Router only resolves it once `index.html`'s own JS has
+loaded.
 
-## CI/CD (Phase 17)
+`VITE_API_BASE_URL` is a **build-time** argument (`ARG`/`ENV` in the Dockerfile), not a runtime
+environment variable - Vite inlines `import.meta.env` values into the bundle during `vite
+build`, so changing it after the image is built has no effect. A real multi-environment
+deployment would rebuild the image per environment for exactly this reason, the same trade-off
+any compile-time-configured static site makes.
 
-`.github/workflows/ci.yml`, two jobs, run on every push and pull request against `main`:
+This is a later addition than the rest of Phase 16: `docker-compose.yml` had a `frontend`
+service block since Phase 1, in anticipation of the frontend work, but was deliberately removed
+during Phase 16 itself because the React app didn't exist yet at that point - a `build:
+{ context: ./frontend }` pointing at a directory with no `Dockerfile` would have made
+`docker compose up` fail outright. The service definition returned once the frontend was
+actually built (see `docs/frontend.md`).
+
+## CI/CD (Phase 17, extended once the frontend existed)
+
+`.github/workflows/ci.yml`, four jobs, run on every push and pull request against `main`:
 
 1. **`test`**: sets up JDK 21 (Temurin, `actions/setup-java`'s built-in Maven cache) and runs
-   `mvn test` - the real Testcontainers-backed suite from `docs/testing.md`, not a mocked
+   `./mvnw test` - the real Testcontainers-backed suite from `docs/testing.md`, not a mocked
    subset. GitHub's `ubuntu-latest` runners have Docker available by default, so this needs no
    extra setup, the same way it needs none in local development. Surefire's report directory is
    uploaded as a build artifact on every run (`if: always()`), so a failure's test reports are
    inspectable from the Actions UI without re-running anything locally.
-2. **`docker-build`** (`needs: test` - never builds/publishes an image from code that didn't
-   even pass its own tests): builds `backend/Dockerfile` with Buildx, using the GitHub Actions
-   cache backend (`cache-from`/`cache-to: type=gha`) so unchanged layers don't get rebuilt on
-   every run. On an actual push to `main` (never for a pull request, including one from a
-   fork that wouldn't have permission to push packages here anyway), logs into GHCR with the
-   automatically-provided `GITHUB_TOKEN` (no extra secret to create or rotate) and pushes the
-   image tagged both `:latest` and `:<commit-sha>`.
+2. **`backend-docker-build`** (`needs: test` - never builds/publishes an image from code that
+   didn't even pass its own tests): builds `backend/Dockerfile` with Buildx, using the GitHub
+   Actions cache backend (`cache-from`/`cache-to: type=gha`) so unchanged layers don't get
+   rebuilt on every run. On an actual push to `main` (never for a pull request, including one
+   from a fork that wouldn't have permission to push packages here anyway), logs into GHCR with
+   the automatically-provided `GITHUB_TOKEN` (no extra secret to create or rotate) and pushes
+   the image tagged both `:latest` and `:<commit-sha>`.
+3. **`frontend`**: `npm ci` then `npm run build` (type-check via `tsc -b`, then `vite build`) -
+   the same command a real deploy would run. Deliberately does **not** run
+   `frontend/e2e/smoke.spec.ts` here: that suite needs the full backend stack
+   (Postgres/Redis/Kafka + the Spring Boot app) up alongside the frontend dev server, which
+   would roughly double this workflow's total runtime for one additional layer of coverage over
+   what the backend's own test suite and this build step already provide - see
+   `docs/testing.md`'s scope philosophy. It stays a local/pre-release check for now, the same
+   way the backend suite's WebSocket coverage stays manual (docs/testing.md again).
+4. **`frontend-docker-build`** (`needs: frontend`): the same build-then-push pattern as
+   `backend-docker-build`, for `frontend/Dockerfile`.
 
 A `concurrency` group keyed on the branch/PR ref cancels a still-running CI job the moment a
 newer commit supersedes it - no value in finishing a build for a commit nobody will look at.

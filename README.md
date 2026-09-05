@@ -13,10 +13,11 @@ implemented yet.
 
 ## Status
 
-Under active, phased development. See `docs/architecture.md` → "Development phase log" for
-exactly which phases are complete. Currently: **Phase 20 (final documentation) done — all 20 backend phases complete.** The
-frontend (React/TypeScript/Vite) is being built next; see the note below `Running locally`
-until it lands.
+All 20 planned backend phases are complete (see `docs/architecture.md` → "Development phase
+log" for the full history), and the React/TypeScript frontend - a real Kanban board with
+drag-and-drop, live updates, and dark mode, not a bare CRUD form set - is built and working
+end to end against it. See `docs/frontend.md` for what it covers and two real bugs its own
+end-to-end test found while it was being built.
 
 ## Why this project exists
 
@@ -31,9 +32,9 @@ WebSockets, authentication/authorization, testing, containerization, and CI/CD. 
 ```
 collabflow/
 ├── backend/     Spring Boot modular monolith (Java 21, Maven)
-├── frontend/    React + TypeScript + Vite
+├── frontend/    React + TypeScript + Vite (Kanban board, real-time updates, e2e tests)
 ├── docs/        architecture, database, API, security, ADRs, interview prep
-├── docker-compose.yml   Postgres + Redis + Kafka (+ backend/frontend once containerized)
+├── docker-compose.yml   Postgres + Redis + Kafka + backend + frontend, all containerized
 └── .env.example
 ```
 
@@ -52,9 +53,9 @@ Full module breakdown and rationale: [`docs/architecture.md`](docs/architecture.
 | Real-time | WebSocket + STOMP | see ADR-005 (added Phase 12) |
 | Migrations | Flyway | versioned, reviewable schema evolution |
 | Module boundaries | Spring Modulith | enforced (not just conventional) modular monolith |
-| Frontend | React + TypeScript + Vite | modern, fast dev loop, not the focus of this project |
-| Containerization | Docker / Docker Compose | reproducible local environment |
-| CI | GitHub Actions | build → test → package → docker build |
+| Frontend | React 19 + TypeScript + Vite | see `docs/frontend.md` for the full stack (TanStack Query, Zustand, @dnd-kit, Tailwind v4) and why each piece |
+| Containerization | Docker / Docker Compose | reproducible local environment, backend + frontend both containerized |
+| CI | GitHub Actions | backend test → backend image, frontend build → frontend image |
 
 Full list with reasoning: [`docs/decisions.md`](docs/decisions.md).
 
@@ -64,46 +65,53 @@ Full list with reasoning: [`docs/decisions.md`](docs/decisions.md).
 - Maven 3.9+ (or use `backend/mvnw` / `mvnw.cmd`, which downloads a pinned Maven version - no
   separate Maven install required)
 - Docker + Docker Compose
-- Node.js 20+ (frontend only)
+- Node.js 22+ (frontend only)
 
 ## Running locally
 
-1. Copy `.env.example` to `.env` and fill in real values (at minimum generate a `JWT_SECRET`
-   with `openssl rand -base64 64` — the app refuses to start without one, on purpose).
+Copy `.env.example` to `.env` and fill in real values first (at minimum generate a
+`JWT_SECRET` with `openssl rand -base64 64` — the app refuses to start without one, on
+purpose).
 
-**Option A — everything via Docker Compose** (Postgres, Redis, Kafka, and the backend itself,
-built from `backend/Dockerfile` - see `docs/deployment.md` for how that image is built):
+**Option A — everything via Docker Compose** (Postgres, Redis, Kafka, the backend, and the
+frontend, all containerized - see `docs/deployment.md` for how those images are built):
 ```bash
 docker compose up -d --build
 ```
+Then open `http://localhost:5173`.
 
-**Option B — infrastructure in Docker, backend run directly** (faster edit/rebuild loop during
+**Option B — infrastructure in Docker, app code run directly** (faster edit/rebuild loop during
 development, since it skips the container build on every code change):
 ```bash
 docker compose up -d postgres redis kafka
+
 cd backend
-mvn spring-boot:run -Dspring-boot.run.profiles=dev
+./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
+# in a second terminal:
+cd frontend
+npm install
+npm run dev
 ```
-The app reads DB/Redis/Kafka connection details from environment variables (see
+The backend reads DB/Redis/Kafka connection details from environment variables (see
 `.env.example`); export them into your shell or use a tool like `direnv` / your IDE's
-run-configuration env support.
+run-configuration env support. Then open `http://localhost:5173` (the frontend) - it talks to
+the backend at `http://localhost:8080` by default (`frontend/.env.example`).
 
-Either way:
-3. API docs (Swagger UI): `http://localhost:8080/swagger-ui.html`
-4. Health check: `http://localhost:8080/actuator/health`
-
-Frontend setup instructions are added once the frontend phase begins - see
-`docker-compose.yml`'s comment on why no `frontend` service is defined yet.
+Either way, the backend on its own also exposes:
+- API docs (Swagger UI): `http://localhost:8080/swagger-ui.html`
+- Health check: `http://localhost:8080/actuator/health`
 
 ## Testing
 
 ```bash
 cd backend
-mvn test
+./mvnw test
 ```
 
 Test strategy (unit, integration with Testcontainers, security, concurrency) is documented in
-`docs/architecture.md` and expanded in Phase 14.
+`docs/testing.md`. The frontend has its own real end-to-end test against the live backend
+(`cd frontend && npm run test:e2e`, full stack must already be running) - see `docs/frontend.md`
+for two real bugs it found while being written.
 
 ## Environment variables
 
@@ -113,7 +121,8 @@ default in `application.yml` — the app fails fast at startup if `JWT_SECRET` i
 
 ## Documentation
 
-- [`docs/architecture.md`](docs/architecture.md) — module boundaries, real-time flow, event flow
+- [`docs/architecture.md`](docs/architecture.md) — module boundaries, real-time flow, event flow, full phase log
+- [`docs/frontend.md`](docs/frontend.md) — frontend stack, what's implemented, two real bugs its e2e test found
 - [`docs/database.md`](docs/database.md) — schema, indexes, concurrency (added Phase 2+)
 - [`docs/redis.md`](docs/redis.md) — what's cached and why, rate limiting (added Phase 9)
 - [`docs/kafka.md`](docs/kafka.md) — topics, delivery guarantees, idempotency (added Phase 10)
