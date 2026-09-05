@@ -74,6 +74,7 @@ accidentally public by omission.
 |---|---|---|
 | Per-email (not just per-IP) login rate limiting | Not yet planned | A distributed brute force against one account from many IPs would not be caught by the current IP-only limiter. See `AuthController`'s Javadoc. |
 | Refresh-token/expired-session cleanup job | Not yet planned | The `ix_refresh_tokens_expires_at` index exists for this; the scheduled job itself isn't written yet - old revoked/expired rows just accumulate. |
+| No per-subscription project-membership check on WebSocket `/topic/projects/{id}` | Not yet planned | Any authenticated user can subscribe to any project's topic id; the leaked data is limited to ids and enum values already in the broadcast payload (no titles/descriptions/comment bodies), so severity is low, but it's a real inconsistency with this API's usual "you must have project access" rule. See `docs/websocket.md`. |
 | Secure response headers (HSTS, CSP, X-Content-Type-Options, etc.) | Phase 15 | Deferred to the dedicated security-hardening phase. |
 | Dependency vulnerability scanning | Phase 15 / 17 (CI) | Not yet wired into the build. |
 | CSRF reconsideration if cookie-based auth is ever added | N/A unless the auth transport changes | See "Stateless sessions" above - not a gap under the current design, but the assumption to revisit if that design changes. |

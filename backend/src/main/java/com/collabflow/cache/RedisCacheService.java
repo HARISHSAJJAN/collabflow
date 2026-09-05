@@ -1,5 +1,6 @@
 package com.collabflow.cache;
 
+import com.collabflow.common.TransactionUtils;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -10,8 +11,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * A small, explicit cache-aside helper - deliberately not Spring's {@code @Cacheable}
@@ -115,15 +114,6 @@ public class RedisCacheService {
      * currently are, but a future one could be).</p>
      */
     public void evictAfterCommit(String key) {
-        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-            evict(key);
-            return;
-        }
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-                evict(key);
-            }
-        });
+        TransactionUtils.runAfterCommit(() -> evict(key));
     }
 }

@@ -38,6 +38,11 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
  *   <li><b>Public endpoints</b> are an explicit allow-list (auth endpoints, health, API docs);
  *       everything else requires authentication by default, so a new controller added later
  *       is secure-by-default rather than accidentally public.</li>
+ *   <li><b>{@code /ws/**} is public here too</b>, but is not actually open access - see
+ *       {@code websocket.JwtStompAuthInterceptor}'s Javadoc: the WebSocket handshake itself
+ *       can't carry an {@code Authorization} header (a browser API limitation), so
+ *       authentication for that endpoint happens one protocol layer up, at the first STOMP
+ *       frame, instead of here.</li>
  * </ul>
  */
 @Configuration
@@ -84,7 +89,8 @@ public class SecurityConfig {
                                 "/actuator/health/**",
                                 "/swagger-ui.html",
                                 "/swagger-ui/**",
-                                "/v3/api-docs/**")
+                                "/v3/api-docs/**",
+                                "/ws/**")
                         .permitAll()
                         .anyRequest().authenticated())
                 .addFilterBefore(new JwtAuthenticationFilter(jwtService), UsernamePasswordAuthenticationFilter.class);

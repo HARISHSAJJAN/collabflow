@@ -1,5 +1,6 @@
 package com.collabflow.kafka;
 
+import com.collabflow.common.TransactionUtils;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -7,8 +8,6 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.KafkaHeaders;
 import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * The one place in the codebase that talks to Kafka's producer API. Every domain event a
@@ -62,17 +61,7 @@ public class DomainEventPublisher {
      * @param payload the event record (e.g. {@code TaskCreatedEvent}) - serialized to JSON with a Java type header, see application.yml
      */
     public void publish(String topic, String key, Object payload) {
-        Runnable send = () -> sendNow(topic, key, payload);
-        if (TransactionSynchronizationManager.isSynchronizationActive()) {
-            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                @Override
-                public void afterCommit() {
-                    send.run();
-                }
-            });
-        } else {
-            send.run();
-        }
+        TransactionUtils.runAfterCommit(() -> sendNow(topic, key, payload));
     }
 
     private void sendNow(String topic, String key, Object payload) {

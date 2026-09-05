@@ -346,5 +346,12 @@ silently notifies no one, rather than leaking whether that address has an accoun
 ### `POST /{notificationId}/read` — mark one notification read
 ### `POST /read-all` — mark every notification read
 
-## Coming in later phases
-- Real-time delivery over WebSocket (Phase 12)
+## WebSocket (`/ws`) — Phase 12
+
+STOMP over native WebSocket, authenticated at the STOMP `CONNECT` frame (not the HTTP
+handshake). Full protocol reference, message shapes, and verification notes:
+[`docs/websocket.md`](websocket.md) and [ADR-005](adr/ADR-005-websockets.md).
+
+- Subscribe to `/topic/projects/{projectId}` for live task/comment updates.
+- Subscribe to `/user/queue/notifications` for real-time notification delivery, on top of
+  (not instead of) `GET /api/v1/notifications`.

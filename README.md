@@ -12,7 +12,7 @@ implemented yet.
 ## Status
 
 Under active, phased development. See `docs/architecture.md` → "Development phase log" for
-exactly which phases are complete. Currently: **Phase 11 (notifications: due-date reminders + @mentions) done.**
+exactly which phases are complete. Currently: **Phase 12 (WebSockets: real-time task updates + notification push) done.**
 
 ## Why this project exists
 
@@ -105,6 +105,7 @@ default in `application.yml` — the app fails fast at startup if `JWT_SECRET` i
 - [`docs/database.md`](docs/database.md) — schema, indexes, concurrency (added Phase 2+)
 - [`docs/redis.md`](docs/redis.md) — what's cached and why, rate limiting (added Phase 9)
 - [`docs/kafka.md`](docs/kafka.md) — topics, delivery guarantees, idempotency (added Phase 10)
+- [`docs/websocket.md`](docs/websocket.md) — STOMP protocol reference, verified behavior (added Phase 12)
 - [`docs/api.md`](docs/api.md) — REST API reference (added Phase 3+)
 - [`docs/security.md`](docs/security.md) — security review (added Phase 15)
 - [`docs/deployment.md`](docs/deployment.md) — Docker/CI-CD (added Phase 16-17)

@@ -5,6 +5,7 @@ import com.collabflow.common.web.PageResponse;
 import com.collabflow.notification.internal.Notification;
 import com.collabflow.notification.internal.NotificationRepository;
 import com.collabflow.notification.internal.ProcessedEventRepository;
+import com.collabflow.websocket.NotificationPusher;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,10 +25,15 @@ public class NotificationService {
 
     private final NotificationRepository notificationRepository;
     private final ProcessedEventRepository processedEventRepository;
+    private final NotificationPusher notificationPusher;
 
-    public NotificationService(NotificationRepository notificationRepository, ProcessedEventRepository processedEventRepository) {
+    public NotificationService(
+            NotificationRepository notificationRepository,
+            ProcessedEventRepository processedEventRepository,
+            NotificationPusher notificationPusher) {
         this.notificationRepository = notificationRepository;
         this.processedEventRepository = processedEventRepository;
+        this.notificationPusher = notificationPusher;
     }
 
     /**
@@ -66,7 +72,12 @@ public class NotificationService {
             log.debug("Event {} already processed - duplicate delivery, skipping", eventId);
             return false;
         }
-        notificationRepository.save(new Notification(recipientId, type, payloadJson));
+        // saveAndFlush, not save: createdAt (@CreationTimestamp) is populated by Hibernate at
+        // flush time, not at save() call time - reading it immediately after a plain save()
+        // for the WebSocket push below would send a null createdAt. See docs/troubleshooting.md
+        // for this exact class of bug, hit and fixed three times already in this project.
+        Notification saved = notificationRepository.saveAndFlush(new Notification(recipientId, type, payloadJson));
+        notificationPusher.pushToUser(recipientId, toResponse(saved));
         return true;
     }
 

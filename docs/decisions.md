@@ -9,7 +9,7 @@ standard Context / Decision / Alternatives / Consequences / Trade-offs format.
 | [ADR-002](adr/ADR-002-postgresql.md) | Why PostgreSQL | Accepted |
 | [ADR-003](adr/ADR-003-redis.md) | Why Redis | Accepted |
 | [ADR-004](adr/ADR-004-kafka.md) | Why Kafka | Accepted |
-| ADR-005 | Why WebSockets (STOMP over raw WebSocket) | Planned — Phase 12 |
+| [ADR-005](adr/ADR-005-websockets.md) | Why WebSockets (STOMP over raw WebSocket) | Accepted |
 | [ADR-006](adr/ADR-006-optimistic-locking.md) | Why optimistic locking for task updates | Accepted |
 | ADR-007 | Why REST (not GraphQL) | Planned — Phase 6 |
 | [ADR-008](adr/ADR-008-jwt-and-refresh-tokens.md) | Why JWT access + refresh tokens (not server sessions) | Accepted |

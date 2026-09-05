@@ -84,8 +84,10 @@ WebSocket broadcast listener  ────┼──► STOMP message on /topic/p
                               User B's browser updates without a refresh
 ```
 
-Details (connection lifecycle, auth, channels, disconnect/reconnect, security) are documented
-in full once Phase 12 (WebSockets) is implemented.
+This is exactly what's implemented as of Phase 12, verified with a real STOMP test client, not
+just diagrammed speculatively - full details (connection lifecycle, auth, channels, disconnect/
+reconnect, security, and known gaps) in [`docs/websocket.md`](websocket.md) and
+[ADR-005](adr/ADR-005-websockets.md).
 
 ## Event-driven flow (Kafka)
 
@@ -258,3 +260,20 @@ cross-process delivery) that don't apply.
   non-member/outsider email in the same comment produces nothing for it; and the due-date
   query was verified against a real task due tomorrow (the 08:00 cron firing itself wasn't
   observed live in testing - stated plainly rather than implied).
+- **Phase 12 — WebSockets (done)**: STOMP over native WebSocket (`/ws`), authenticated at the
+  STOMP `CONNECT` frame rather than the HTTP handshake (a browser can't set an
+  `Authorization` header on the WebSocket upgrade request - see `JwtStompAuthInterceptor`'s
+  Javadoc). `/topic/projects/{id}` broadcasts task/comment updates; `/user/queue/notifications`
+  delivers real-time notification pushes on top of the existing REST polling path. Both are
+  a *third* independent reaction to the same in-process Spring events `audit` already
+  consumes - added without touching any producer. Extracted `common.TransactionUtils` after
+  the "defer until commit" pattern (Redis eviction, Kafka publish, now WebSocket
+  broadcast/push) showed up a third time. **Verified with a hand-rolled STOMP test client**
+  (`ws` + raw STOMP framing - curl doesn't speak STOMP), not just implemented: a valid token
+  gets `CONNECTED` with the correct `user-name`; no token gets `ERROR` and the connection
+  closes; subscribing to a real project and changing a task's status over REST delivered the
+  expected `MESSAGE` on both the project topic and the personal notification queue, with a
+  correctly populated (non-null) `createdAt` on the pushed notification - the same timing
+  class of bug hit three times before, checked for and avoided here proactively rather than
+  found after the fact. ADR-005; docs/websocket.md documents a real, low-severity gap (no
+  per-subscription project-membership check) rather than hiding it.
