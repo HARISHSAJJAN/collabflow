@@ -12,7 +12,7 @@ implemented yet.
 ## Status
 
 Under active, phased development. See `docs/architecture.md` → "Development phase log" for
-exactly which phases are complete. Currently: **Phase 10 (Kafka events + notification consumer) done.**
+exactly which phases are complete. Currently: **Phase 11 (notifications: due-date reminders + @mentions) done.**
 
 ## Why this project exists
 

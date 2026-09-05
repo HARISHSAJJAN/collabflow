@@ -328,10 +328,15 @@ require authentication and act only on the caller's own notifications.
 ```json
 {"content": [{"id": "...", "type": "TASK_ASSIGNED", "payload": "{\"taskId\":\"...\",...}", "read": false, "createdAt": "..."}], "page": 0, "size": 20, ...}
 ```
-`type` is one of `TASK_ASSIGNED`, `TASK_STATUS_CHANGED`, `COMMENT_ADDED`, `TEAM_MEMBER_ADDED`
-(produced today), plus `TASK_MENTION`, `DUE_DATE_APPROACHING` (defined, not yet produced by
-anything - see `NotificationType`'s Javadoc). `payload` is a JSON string whose shape depends
-on `type`.
+`type` is one of `TASK_ASSIGNED`, `TASK_STATUS_CHANGED`, `COMMENT_ADDED`, `TEAM_MEMBER_ADDED`,
+`TASK_MENTION` (Phase 11 - see below), or `DUE_DATE_APPROACHING` (Phase 11 - a daily scheduled
+sweep, not an event; see `docs/kafka.md`). `payload` is a JSON string whose shape depends on
+`type`.
+
+`TASK_MENTION` (Phase 11) is produced by writing `@someone@example.com` (an exact email
+address, not a username/handle - this project has no such system) in a comment body. Only
+notifies if that email belongs to an actual project member; a typo'd or outsider email
+silently notifies no one, rather than leaking whether that address has an account at all.
 
 ### `GET /unread-count`
 ```json

@@ -99,6 +99,18 @@ across different aggregates** (a `TaskCreatedEvent` for task A and a `MemberAdde
 unrelated team have no defined relative order) - which is fine, since nothing in this system
 needs cross-aggregate ordering.
 
+## Not every notification goes through Kafka
+
+`DUE_DATE_APPROACHING` (Phase 11) is deliberately **not** a Kafka event - nothing "happens" to
+produce one; a due date approaching is discovered, not announced. `DueDateReminderJob` is a
+plain `@Scheduled` sweep (daily, 08:00 server time) that queries for tasks due the next day and
+calls the same `NotificationService.recordEventAndNotify` idempotency path directly, using a
+key derived from `(taskId, date)` instead of a Kafka message's `eventId` - see that job's
+Javadoc. Verified by creating a task due tomorrow and confirming the underlying query matches
+it correctly; the actual 08:00 firing wasn't observed live in this project's testing (that
+would mean waiting for it, or changing the schedule just to test it), which is worth being
+upfront about rather than implying otherwise.
+
 ## What's not implemented, on purpose
 
 - **Transactional outbox**: closing the "lost event on an ill-timed crash" gap in

@@ -188,12 +188,20 @@ public class TaskService {
         return toResponse(task, labelsOf(taskId));
     }
 
-    // --- cross-module API, used by the comment module (Phase 8) ---
+    // --- cross-module API, used by the comment module (Phase 8) and notification module (Phase 11) ---
 
     @Transactional(readOnly = true)
     public TaskSummary requireTaskSummary(UUID taskId) {
         Task task = requireTask(taskId);
         return new TaskSummary(task.getId(), task.getProjectId(), task.getAssigneeId(), task.getReporterId());
+    }
+
+    /** Used by {@code notification.internal.DueDateReminderJob}'s daily sweep - there is no "due date approaching" event to listen for, since nothing happens to trigger one. */
+    @Transactional(readOnly = true)
+    public List<DueSoonTask> findTasksDueOn(LocalDate date) {
+        return taskRepository.findDueOnAndAssignedAndNotDone(date).stream()
+                .map(t -> new DueSoonTask(t.getId(), t.getProjectId(), t.getAssigneeId(), t.getTitle(), t.getDueDate()))
+                .toList();
     }
 
     // --- internal helpers ---

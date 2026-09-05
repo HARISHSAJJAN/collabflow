@@ -66,10 +66,19 @@ relevant code's Javadoc and cross-referenced here so they're easy to find:
   11: Notifications"** (see docs/kafka.md's opening note and the V8 migration's comment):
   Kafka's consumer side needs a real, meaningful consumer to actually demonstrate consumption
   (offsets, consumer groups, idempotent processing) rather than a throwaway demo listener, and
-  "create a notification when a relevant event arrives" is exactly that consumer. What's left
-  for Phase 11 is narrow: due-date-approaching notifications (needs a scheduled job, since
-  nothing "happens" to trigger it) and `TASK_MENTION` (parsing @mentions out of comment text).
-  Phase 12 adds real-time WebSocket delivery on top of what's already being created here.
+  "create a notification when a relevant event arrives" is exactly that consumer. Phase 11
+  then added the two pieces that genuinely needed their own phase: `DUE_DATE_APPROACHING`
+  (a daily scheduled sweep - `DueDateReminderJob` - since nothing "happens" to trigger it) and
+  `TASK_MENTION` (parsing comment bodies). Phase 12 adds real-time WebSocket delivery on top
+  of what's already being created here.
+- **@mentions match an exact email address, not a username/handle** (Phase 11,
+  `CommentEventsListener`'s Javadoc): this project has no username/handle system at all (users
+  are identified by email and display name only), so building mention-matching around one
+  would mean building that system first - real additional scope the brief's "task mention"
+  line item doesn't itself demand. Matching on exact email is simple, unambiguous, and
+  requires no autocomplete UI to be usable by a determined user. A mentioned email that isn't
+  an actual project member (a typo, an outsider) notifies no one, silently - not an error,
+  and specifically not a way to probe whether an email has an account.
 - **No cross-module JPA associations, ever** (first established Phase 5, `Team.java`'s
   Javadoc; see also `docs/database.md`'s "Cross-module foreign keys" section): every
   reference from one module's entity to a row owned by another module is a plain UUID column

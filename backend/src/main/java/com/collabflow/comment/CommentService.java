@@ -59,7 +59,7 @@ public class CommentService {
         projectService.requireProjectAccess(task.projectId(), requestingUserId);
 
         Comment saved = commentRepository.saveAndFlush(new Comment(taskId, requestingUserId, body.trim()));
-        CommentCreatedEvent event = new CommentCreatedEvent(saved.getId(), taskId, task.projectId(), requestingUserId);
+        CommentCreatedEvent event = new CommentCreatedEvent(saved.getId(), taskId, task.projectId(), requestingUserId, saved.getBody());
         eventPublisher.publishEvent(event);
         domainEventPublisher.publish(KafkaTopics.COMMENT_EVENTS, taskId.toString(), event);
         return toResponse(saved);

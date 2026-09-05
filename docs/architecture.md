@@ -247,3 +247,14 @@ cross-process delivery) that don't apply.
   fan-out (with per-recipient dedup keys), and team membership; self-actions correctly
   suppress their own notification; and - the part that actually matters - replaying the exact
   same message backlog twice produces exactly one notification per event, not two.
+- **Phase 11 — Notifications, remainder (done)**: the two pieces not already covered by
+  Phase 10's consumer work. `DUE_DATE_APPROACHING` via `DueDateReminderJob`, a daily
+  `@Scheduled` sweep - deliberately not a Kafka event, since nothing "happens" to produce one
+  (see docs/kafka.md). `TASK_MENTION` via `CommentEventsListener` parsing `@email` tokens out
+  of the comment body (added as a new field on `CommentCreatedEvent`), matched against exact
+  email addresses since this project has no username/handle system - a mentioned email that
+  isn't an actual project member notifies no one, silently. Verified end-to-end: mentioning a
+  real project member's email produces a `TASK_MENTION` notification for them; mentioning a
+  non-member/outsider email in the same comment produces nothing for it; and the due-date
+  query was verified against a real task due tomorrow (the 08:00 cron firing itself wasn't
+  observed live in testing - stated plainly rather than implied).
