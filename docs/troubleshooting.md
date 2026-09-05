@@ -279,6 +279,78 @@ binding; the equivalent JPQL pattern (used elsewhere in this codebase, e.g.
 `TaskRepository.search`) doesn't have this problem, because Hibernate already knows each
 parameter's type from the entity's mapped attribute and sends it explicitly.
 
+## Phase 14 test suite: four separate bugs on the way to a green `mvn test`
+
+Getting the Testcontainers-based integration suite to actually pass reliably took four
+distinct fixes, found in this order. Recorded together because the first three all *looked*
+like the same symptom (a test failing with a database/cache connection error) but had three
+unrelated root causes, and conflating them would have wasted time chasing the wrong one.
+
+**Bug 1 - `spring-modulith-core` incompatible with the Spring Boot patch version actually
+resolved.** `ModularityTests` (`ApplicationModules.of(...)`) failed at class-init with
+`NoSuchMethodError: ConfigDataEnvironmentPostProcessor.applyTo(...)`. Spring Modulith's `2.1.x`
+line targets a newer Spring Boot generation than `3.5.16`; the `3.5.x` line of Spring Boot
+pairs with Spring Modulith's `1.4.x` line instead, despite both being "current" on Maven
+Central at the same time. **Fix**: pin `spring-modulith.version` to `1.4.13` in `backend/pom.xml`
+instead of the newer `2.1.1`.
+
+**Bug 2 - Testcontainers' `KafkaContainer` rejected the `apache/kafka` image.** The same test
+class's Kafka container failed to start with `Failed to verify that image 'apache/kafka:3.9.2'
+is a compatible substitute for 'confluentinc/cp-kafka'`. `org.testcontainers.containers
+.KafkaContainer` (the older class) only accepts Confluent-flavored images unless told
+otherwise via `.asCompatibleSubstituteFor(...)`. **Fix**: import
+`org.testcontainers.kafka.KafkaContainer` instead (a newer class in the same `testcontainers:
+kafka` artifact, present since Testcontainers 1.19.1) - it understands the `apache/kafka` image
+natively, matching the image `docker-compose.yml` already runs for local dev.
+
+**Bug 3 - the "singleton container" pattern was silently unstable across a long, multi-class
+JVM run on this machine (Windows + WSL2 + Docker Desktop).** With Bugs 1-2 fixed, running the
+full suite (all 8 integration test classes, sharing one JVM per Surefire's default
+`reuseForks=true`) reliably failed a few classes in with `Connection to localhost:NNNNN
+refused` on Postgres, Redis, and Kafka simultaneously - but running any *one* of those same
+classes alone always passed. The log showed the actual mechanism: fresh Postgres/Redis/Kafka
+containers being created several times *within a single `mvn test` invocation* (new container
+IDs each time, all from the same `[main]` thread), meaning the static "singleton" containers
+kept getting silently killed and replaced partway through the run. Ruled out, in order, by
+directly testing each: the OS's own idle-sleep timer (suppressing it with
+`SetThreadExecutionState` didn't help), Docker Desktop's "Resource Saver" VM auto-pause
+(disabling it didn't help), and Testcontainers' own Ryuk reaper (`TESTCONTAINERS_RYUK_DISABLED
+=true` didn't help - `docker events` showed the containers were still being `kill`ed at the
+same points). The actual trigger was never conclusively identified beyond "this environment
+cannot keep three long-lived Testcontainers containers alive across many sequential Spring test
+contexts in one JVM" - a real, reproducible limitation of this Windows/WSL2/Docker Desktop
+setup, not of the application. **Fix**: `backend/pom.xml` now configures Surefire with
+`<forkCount>1</forkCount><reuseForks>false</reuseForks>` - a fresh JVM per test *class* instead
+of one JVM for the whole run. Each class's containers then only need to survive for that
+class's own few seconds of runtime, comfortably inside whatever window this environment can
+sustain, at the cost of a few extra seconds of container-startup overhead per class.
+
+**Bug 4 - a real 409 conflict was masked as an unrelated `RestClientException`, making
+`TaskConcurrencyIntegrationTest` look like a completely different bug.** Even after Bug 3's
+fix, this one class kept failing - deterministically, not flakily, and regardless of racer
+count (tried 3, 10, and 40) or whether the Hikari pool was pre-warmed or virtual threads were
+disabled, all of which were tested and ruled out as causes before finding the real one. Adding
+a diagnostic `catch (RuntimeException e) { print e.getClass() }` around each racer's HTTP call
+revealed the actual exception: `RestClientException: Error while extracting response for type
+[TaskResponse]` - a Jackson deserialization failure, not a connectivity problem. `TestRestTemplate`
+does not throw for a non-2xx response the way a plain `RestTemplate` does, so the test's
+`restTemplate.exchange(..., TaskResponse.class)` call still tried to deserialize a losing
+racer's 409 response body - an `ApiError`, not a `TaskResponse` - into `TaskResponse`. Jackson
+cannot leave `TaskResponse`'s `long version` field (a primitive) unset from a canonical-
+constructor record, so deserialization threw for every 409, before the test ever got to look at
+the status code. Every "conflict" was actually happening correctly server-side; the test just
+never observed it. **Fix**: request the racer response as `ResponseEntity<String>` instead of
+`ResponseEntity<TaskResponse>` - the loop only needs the status code, and the final state is
+re-fetched with its real type afterward via `TestFixtures.get(...)`.
+
+**Takeaway**: when several early attempts at reproducing a concurrency/infra bug all show a
+"connection" or "extraction" error, don't assume they're the same bug just because the surface
+symptom rhymes - isolate each one (run alone vs. in the suite; with a feature on vs. off) before
+picking a fix, the way each of these four turned out to need a completely different one. And
+specifically for `TestRestTemplate`: because it doesn't throw on error statuses, any call whose
+response might legitimately be a non-2xx needs a response type that can represent *both*
+outcomes (a `String`, or `Object`), never the success-only DTO type.
+
 ## Backend fails to start: `Required property 'collabflow.jwt.secret' not found` (or connection refused to Postgres/Redis/Kafka)
 
 **When**: running `mvn spring-boot:run` without infrastructure up, or without a `.env`/exported

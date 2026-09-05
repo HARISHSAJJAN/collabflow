@@ -19,7 +19,7 @@
 
     <properties>
         <java.version>21</java.version>
-        <spring-modulith.version>2.1.1</spring-modulith.version>
+        <spring-modulith.version>1.4.13</spring-modulith.version>
         <springdoc.version>2.8.9</springdoc.version>
         <jjwt.version>0.12.6</jjwt.version>
     </properties>
@@ -188,6 +188,27 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <!-- A fresh JVM per test class instead of Surefire's default single
+                     reused fork. Found by testing (see docs/troubleshooting.md): the
+                     Testcontainers "singleton container" pattern this suite uses (static
+                     Postgres/Redis/Kafka containers shared across all integration test
+                     classes in one JVM) is unreliable in this Windows/WSL2/Docker Desktop
+                     environment - the shared containers get silently killed and replaced
+                     partway through a long multi-class run, failing whichever test happens
+                     to be mid-request at the time. Isolating each class to its own JVM
+                     keeps each class's containers alive for only the short window (seconds)
+                     that class actually needs them, which stays well clear of whatever is
+                     destabilizing longer-lived shared containers here. Slower than sharing
+                     containers would be, but correct - and container startup itself is only
+                     a few seconds per class. -->
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <forkCount>1</forkCount>
+                    <reuseForks>false</reuseForks>
+                </configuration>
             </plugin>
         </plugins>
     </build>

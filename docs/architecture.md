@@ -295,3 +295,19 @@ cross-process delivery) that don't apply.
   keyword search correctly matching stemmed forms and excluding non-matches, label filtering,
   date-range filtering (post-fix), a combined multi-filter query, and the default sort order
   (nearest due date first, nulls last).
+
+- **Phase 14 — Testing (done)**: an automated JUnit 5 + Testcontainers suite (real Postgres/
+  Redis/Kafka, no mocks, per `docs/testing.md`'s coverage table) - 31 tests across modularity
+  boundary enforcement, JWT/validation unit tests, the full auth lifecycle, team RBAC, the
+  Phase 7 concurrency proof (now automated: ten real threads racing a PATCH, asserting the 409/
+  200 split and final version), the Phase 10 Kafka-dedup idempotency guarantee, and cross-
+  cutting security boundaries (missing/malformed/tampered tokens, task's assignee-or-ADMIN+
+  rule). **Found four real bugs getting to a reliable green run**, three of them environment/
+  tooling issues that looked identical at first (a Postgres/Redis/Kafka "connection refused")
+  but had three unrelated causes, and a fourth that was an actual test-design bug masking real
+  409s as an unrelated deserialization error - full root-cause writeup for all four in
+  `docs/troubleshooting.md`. Net result: `spring-modulith` pinned to the Spring Boot 3.5-
+  compatible `1.4.13` (not the newer-but-incompatible `2.1.1`), the Kafka Testcontainer switched
+  to the class that natively supports the `apache/kafka` image, Surefire configured for one JVM
+  fork per test class instead of one shared fork for the whole run, and the concurrency test's
+  racer requests read as `String` instead of the success-only response DTO.
