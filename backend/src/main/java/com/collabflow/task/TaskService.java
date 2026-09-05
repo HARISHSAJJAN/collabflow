@@ -13,6 +13,7 @@ import com.collabflow.team.TeamRole;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -42,11 +43,17 @@ public class TaskService {
     private final TaskRepository taskRepository;
     private final TaskLabelRepository taskLabelRepository;
     private final ProjectService projectService;
+    private final ApplicationEventPublisher eventPublisher;
 
-    public TaskService(TaskRepository taskRepository, TaskLabelRepository taskLabelRepository, ProjectService projectService) {
+    public TaskService(
+            TaskRepository taskRepository,
+            TaskLabelRepository taskLabelRepository,
+            ProjectService projectService,
+            ApplicationEventPublisher eventPublisher) {
         this.taskRepository = taskRepository;
         this.taskLabelRepository = taskLabelRepository;
         this.projectService = projectService;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional
@@ -62,6 +69,10 @@ public class TaskService {
         Task task = new Task(projectId, title.trim(), blankToNull(description), priority, dueDate, requestingUserId);
         task.setAssigneeId(assigneeId);
         Task saved = taskRepository.saveAndFlush(task);
+        eventPublisher.publishEvent(new TaskCreatedEvent(saved.getId(), projectId, saved.getTitle(), requestingUserId));
+        if (assigneeId != null) {
+            eventPublisher.publishEvent(new TaskAssignedEvent(saved.getId(), projectId, assigneeId, requestingUserId));
+        }
         return toResponse(saved, List.of());
     }
 
@@ -91,11 +102,15 @@ public class TaskService {
             UUID taskId, UUID requestingUserId, String title, String description, TaskPriority priority, LocalDate dueDate) {
         Task task = requireTask(taskId);
         requireCanModify(task, requestingUserId);
+        TaskPriority oldPriority = task.getPriority();
         task.setTitle(title.trim());
         task.setDescription(blankToNull(description));
         task.setPriority(priority != null ? priority : task.getPriority());
         task.setDueDate(dueDate);
         Task saved = taskRepository.saveAndFlush(task);
+        if (priority != null && priority != oldPriority) {
+            eventPublisher.publishEvent(new TaskPriorityChangedEvent(taskId, task.getProjectId(), oldPriority, priority, requestingUserId));
+        }
         return toResponse(saved, labelsOf(taskId));
     }
 
@@ -103,8 +118,12 @@ public class TaskService {
     public TaskResponse changeStatus(UUID taskId, UUID requestingUserId, TaskStatus newStatus) {
         Task task = requireTask(taskId);
         requireCanModify(task, requestingUserId);
+        TaskStatus oldStatus = task.getStatus();
         task.setStatus(newStatus);
         Task saved = taskRepository.saveAndFlush(task);
+        if (newStatus != oldStatus) {
+            eventPublisher.publishEvent(new TaskStatusChangedEvent(taskId, task.getProjectId(), oldStatus, newStatus, requestingUserId));
+        }
         return toResponse(saved, labelsOf(taskId));
     }
 
@@ -120,6 +139,7 @@ public class TaskService {
         }
         task.setAssigneeId(newAssigneeId);
         Task saved = taskRepository.saveAndFlush(task);
+        eventPublisher.publishEvent(new TaskAssignedEvent(taskId, task.getProjectId(), newAssigneeId, requestingUserId));
         return toResponse(saved, labelsOf(taskId));
     }
 

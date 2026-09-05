@@ -55,6 +55,13 @@ relevant code's Javadoc and cross-referenced here so they're easy to find:
   literally, the brief's "MEMBER: create/update assigned tasks" describes a MEMBER acting on
   work already assigned to them, not reassigning work to anyone (including themselves) at
   will after the fact. Deciding who works on what was treated as a management action.
+- **Comment deletion allows a narrow ADMIN+ moderation override; editing never does** (Phase
+  8, `CommentService`'s class Javadoc): the brief phrases comment edit/delete as things "users
+  can" do to their own comments, without an explicit moderation carve-out. Deletion was
+  extended to team ADMIN/OWNER anyway - removing someone else's inappropriate comment is a
+  normal, low-risk moderation action - while editing someone else's comment content stays
+  author-only with no exception, since rewriting what someone else said is a different,
+  higher-risk kind of action than removing it.
 - **No cross-module JPA associations, ever** (first established Phase 5, `Team.java`'s
   Javadoc; see also `docs/database.md`'s "Cross-module foreign keys" section): every
   reference from one module's entity to a row owned by another module is a plain UUID column

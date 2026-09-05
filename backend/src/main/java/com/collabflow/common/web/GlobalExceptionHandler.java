@@ -1,5 +1,6 @@
 package com.collabflow.common.web;
 
+import com.collabflow.common.exception.BadRequestException;
 import com.collabflow.common.exception.ConflictException;
 import com.collabflow.common.exception.ForbiddenOperationException;
 import com.collabflow.common.exception.ResourceNotFoundException;
@@ -45,6 +46,12 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiError> handleHandlerValidation(HandlerMethodValidationException ex, HttpServletRequest req) {
         return ResponseEntity.badRequest()
                 .body(ApiError.of(400, "VALIDATION_ERROR", "Request parameters failed validation", req.getRequestURI()));
+    }
+
+    @ExceptionHandler(BadRequestException.class)
+    public ResponseEntity<ApiError> handleBadRequest(BadRequestException ex, HttpServletRequest req) {
+        return ResponseEntity.badRequest()
+                .body(ApiError.of(400, "BAD_REQUEST", ex.getMessage(), req.getRequestURI()));
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)

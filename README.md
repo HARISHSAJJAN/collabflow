@@ -12,7 +12,7 @@ implemented yet.
 ## Status
 
 Under active, phased development. See `docs/architecture.md` → "Development phase log" for
-exactly which phases are complete. Currently: **Phase 7 (tasks + optimistic locking) done.**
+exactly which phases are complete. Currently: **Phase 8 (comments and activity history) done.**
 
 ## Why this project exists
 

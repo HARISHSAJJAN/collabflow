@@ -45,6 +45,8 @@ Migrations are managed with Flyway, versioned SQL files in
 | V3 | `V3__create_teams_and_team_members.sql` | `teams`, `team_members` | 5 |
 | V4 | `V4__create_projects_and_project_members.sql` | `projects`, `project_members` | 6 |
 | V5 | `V5__create_tasks_and_task_labels.sql` | `tasks`, `task_labels` | 7 |
+| V6 | `V6__create_comments.sql` | `comments` | 8 |
+| V7 | `V7__create_audit_logs.sql` | `audit_logs` | 8 |
 
 ## `users`
 
@@ -151,6 +153,33 @@ project). One request won and the row's version advanced by exactly one; the oth
 `409 CONCURRENT_MODIFICATION` instead of silently overwriting the winner's change. A proper
 concurrent-access `TaskConcurrencyTest` (two real threads, not two sequential requests) is
 added in Phase 14 to keep this guarantee under automated regression coverage.
+
+## `comments`
+
+`(task_id, author_id, body, edited_at, created_at, updated_at)`. `edited_at` is set explicitly
+by application code (`Comment.edit()`) the moment a genuine post-creation edit happens - not
+derived by comparing `created_at`/`updated_at`, which are both populated by Hibernate at the
+same flush and aren't guaranteed to differ meaningfully for a just-created row. Index:
+`ix_comments_task_id_created_at` (a task's comment thread, in order - the only query this
+table needs to serve).
+
+## `audit_logs`
+
+`(actor_id, action, resource_type, resource_id, project_id, team_id, old_value JSONB,
+new_value JSONB, created_at)`. `actor_id` is nullable - unlike almost every other "who did
+this" column in this schema - because a future system-initiated action (a scheduled job) would
+have no human actor, and the trail should still be able to record what happened.
+`old_value`/`new_value` are `JSONB` (mapped via Hibernate 6's built-in `@JdbcTypeCode(SqlTypes.
+JSON)`, no third-party library needed) because a generic audit trail spans many different
+resource types with genuinely different "what changed" shapes - see the V7 migration's
+comment and [ADR-002](adr/ADR-002-postgresql.md) for why this is a deliberate, narrow use of
+JSONB rather than a wholesale move away from relational modeling elsewhere in this schema.
+
+Populated purely by listening to events from other modules (task, project, team, comment) -
+see `AuditService`'s Javadoc and docs/architecture.md's "Two kinds of cross-module events."
+Indexes: `ix_audit_logs_project_id_created_at` and `ix_audit_logs_team_id_created_at` (both
+partial, `WHERE ... IS NOT NULL` - not every row has both scopes) back "view project/team
+activity"; `ix_audit_logs_actor_id` backs "what has this user done."
 
 ## Connection pooling
 

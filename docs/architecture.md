@@ -195,3 +195,17 @@ cross-process delivery) that don't apply.
   self-assign-at-creation allowed, assigning someone else as a MEMBER rejected (403),
   ADMIN-only delete enforced, and the cross-module internal-package import check still clean
   with five modules now in place.
+- **Phase 8 — Comments and activity history (done)**: `comment` module (author-only edit,
+  author-or-ADMIN+ delete as a narrow moderation allowance) and `audit` module. `audit` is a
+  pure sink: it never calls into another module, only listens to plain in-process Spring
+  events published by task/project/team/comment (`TaskCreatedEvent`, `TaskAssignedEvent`,
+  `TaskStatusChangedEvent`, `TaskPriorityChangedEvent`, `ProjectCreatedEvent`,
+  `MemberAddedEvent`, `MemberRemovedEvent`, `CommentCreatedEvent`) - the same event types
+  Phase 10 additionally publishes to Kafka for other consumers, so this phase's event classes
+  are reused rather than replaced later. "View project/team activity" authorization lives in
+  `AuditController` (calling `ProjectService`/`TeamService`), not `AuditService`, to keep that
+  module's "never calls out" invariant intact. Verified end-to-end: the full event chain from
+  creating a team/project/task/comment through to the activity feed showing every one of them
+  with correct actor/old-value/new-value, author-only comment editing (403 for anyone else),
+  ADMIN-moderated comment deletion, and the cross-module internal-package import check clean
+  across all seven modules.

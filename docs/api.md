@@ -277,6 +277,45 @@ re-fetch and retry, don't just resubmit blindly. See [ADR-006](adr/ADR-006-optim
 {"label": "backend"}
 ```
 
+## Comments (`/api/v1/comments`) — Phase 8
+
+All endpoints require project access (same rule as viewing the task the comment is on).
+
+### `POST /` — add a comment
+```json
+{"taskId": "...", "body": "Looking into this now"}
+```
+
+### `GET /?taskId={id}&page=&size=` — list a task's comments, oldest first (paginated)
+
+### `PATCH /{commentId}` — edit a comment (author only)
+```json
+{"body": "..."}
+```
+`403` if you're not the author - no exceptions, including for ADMIN/OWNER.
+
+### `DELETE /{commentId}` — delete a comment (author, **or** a team ADMIN/OWNER)
+A narrow moderation allowance not explicitly required by the brief but judged reasonable -
+see `CommentService`'s Javadoc for why deletion has this exception and editing never does.
+
+## Audit / activity (`/api/v1/audit-logs`) — Phase 8
+
+### `GET /?projectId={id}&page=&size=` — project activity (requires project access)
+### `GET /?teamId={id}&page=&size=` — team activity, e.g. membership changes (requires team membership)
+
+Exactly one of `projectId`/`teamId` is required; `400 BAD_REQUEST` if neither is given.
+```json
+{
+  "content": [
+    {"id": "...", "actorId": "...", "action": "TASK_STATUS_CHANGED", "resourceType": "TASK", "resourceId": "...",
+     "oldValue": "{\"status\":\"TODO\"}", "newValue": "{\"status\":\"IN_PROGRESS\"}", "createdAt": "..."}
+  ],
+  "page": 0, "size": 30, "totalElements": 1, "totalPages": 1, "last": true
+}
+```
+Populated automatically from domain events - see `AuditService`'s Javadoc. Currently recorded
+actions: `PROJECT_CREATED`, `TASK_CREATED`, `TASK_ASSIGNED`, `TASK_STATUS_CHANGED`,
+`TASK_PRIORITY_CHANGED`, `COMMENT_ADDED`, `MEMBER_ADDED`, `MEMBER_REMOVED`.
+
 ## Coming in later phases
-- `/api/v1/comments` (Phase 8)
 - `/api/v1/notifications` (Phase 11)

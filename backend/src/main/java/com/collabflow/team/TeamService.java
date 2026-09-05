@@ -15,6 +15,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -44,11 +45,17 @@ public class TeamService {
     private final TeamRepository teamRepository;
     private final TeamMemberRepository teamMemberRepository;
     private final UserAccountService userAccountService;
+    private final ApplicationEventPublisher eventPublisher;
 
-    public TeamService(TeamRepository teamRepository, TeamMemberRepository teamMemberRepository, UserAccountService userAccountService) {
+    public TeamService(
+            TeamRepository teamRepository,
+            TeamMemberRepository teamMemberRepository,
+            UserAccountService userAccountService,
+            ApplicationEventPublisher eventPublisher) {
         this.teamRepository = teamRepository;
         this.teamMemberRepository = teamMemberRepository;
         this.userAccountService = userAccountService;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional
@@ -113,6 +120,7 @@ public class TeamService {
             throw new ConflictException("This user is already a member of the team");
         }
         TeamMember saved = teamMemberRepository.saveAndFlush(new TeamMember(teamId, newMember.id(), TeamRole.MEMBER));
+        eventPublisher.publishEvent(new MemberAddedEvent(teamId, newMember.id(), requestingUserId));
         return new TeamMemberResponse(newMember.id(), newMember.email(), newMember.fullName(), newMember.avatarUrl(), saved.getRole(), saved.getJoinedAt());
     }
 
@@ -127,6 +135,7 @@ public class TeamService {
             throw new ConflictException("A team must always have at least one OWNER; transfer ownership before removing this member");
         }
         teamMemberRepository.delete(target);
+        eventPublisher.publishEvent(new MemberRemovedEvent(teamId, targetUserId, requestingUserId));
     }
 
     @Transactional

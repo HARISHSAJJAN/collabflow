@@ -13,6 +13,7 @@ import com.collabflow.user.UserAccountService;
 import com.collabflow.user.UserSummary;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -43,16 +44,19 @@ public class ProjectService {
     private final ProjectMemberRepository projectMemberRepository;
     private final TeamService teamService;
     private final UserAccountService userAccountService;
+    private final ApplicationEventPublisher eventPublisher;
 
     public ProjectService(
             ProjectRepository projectRepository,
             ProjectMemberRepository projectMemberRepository,
             TeamService teamService,
-            UserAccountService userAccountService) {
+            UserAccountService userAccountService,
+            ApplicationEventPublisher eventPublisher) {
         this.projectRepository = projectRepository;
         this.projectMemberRepository = projectMemberRepository;
         this.teamService = teamService;
         this.userAccountService = userAccountService;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional
@@ -60,6 +64,7 @@ public class ProjectService {
         teamService.requireAtLeast(teamId, requestingUserId, TeamRole.ADMIN);
         Project project = projectRepository.saveAndFlush(new Project(teamId, name.trim(), blankToNull(description), requestingUserId));
         projectMemberRepository.saveAndFlush(new ProjectMember(project.getId(), requestingUserId));
+        eventPublisher.publishEvent(new ProjectCreatedEvent(project.getId(), teamId, project.getName(), requestingUserId));
         return toResponse(project);
     }
 
