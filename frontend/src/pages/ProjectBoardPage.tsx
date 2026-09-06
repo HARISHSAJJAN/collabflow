@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
-import { Archive, ArchiveRestore, Plus, Search } from "lucide-react";
+import { Archive, ArchiveRestore, Plus, Search, Users } from "lucide-react";
 import { KanbanBoard } from "../components/tasks/KanbanBoard";
 import { TaskDetailDrawer } from "../components/tasks/TaskDetailDrawer";
 import { CreateTaskModal } from "../components/tasks/CreateTaskModal";
+import { ManageProjectMembersModal } from "../components/projects/ManageProjectMembersModal";
 import { useProject, useProjectMembers, useArchiveProject } from "../hooks/useProjects";
 import { useTasks } from "../hooks/useTasks";
 import { Input } from "../components/ui/Input";
@@ -22,6 +23,7 @@ export function ProjectBoardPage() {
   const { data: tasksPage, isLoading } = useTasks(projectId, keyword ? { keyword } : {});
   const [selectedTask, setSelectedTask] = useState<TaskResponse | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [membersOpen, setMembersOpen] = useState(false);
   const archiveProject = useArchiveProject();
   const queryClient = useQueryClient();
 
@@ -51,6 +53,9 @@ export function ProjectBoardPage() {
         </div>
         <div className="flex items-center gap-3">
           {members && members.length > 0 && <AvatarStack names={members.map((m) => m.fullName)} />}
+          <Button variant="secondary" size="sm" onClick={() => setMembersOpen(true)}>
+            <Users className="size-4" /> Members
+          </Button>
           <Button
             variant="secondary"
             size="sm"
@@ -88,6 +93,9 @@ export function ProjectBoardPage() {
 
       <TaskDetailDrawer taskId={selectedTask?.id ?? null} projectId={projectId} onClose={() => setSelectedTask(null)} />
       <CreateTaskModal open={createOpen} onClose={() => setCreateOpen(false)} projectId={projectId} />
+      {project && (
+        <ManageProjectMembersModal open={membersOpen} onClose={() => setMembersOpen(false)} projectId={projectId} teamId={project.teamId} />
+      )}
     </div>
   );
 }
