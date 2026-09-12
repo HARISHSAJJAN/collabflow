@@ -54,7 +54,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       # Image/repository names in a registry path must be lowercase; a GitHub username or org
       # name is not guaranteed to be (this repo's owner isn't) - so it can't be used directly
@@ -122,7 +122,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Compute lowercase image owner
         id: vars
